@@ -42,7 +42,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     )
 
     # robot
-    robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
 
     # lights
     dome_light = AssetBaseCfg(
@@ -60,7 +60,9 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointEffortActionCfg(asset_name="robot", joint_names=["slider_to_cart"], scale=100.0)
+    joint_effort = mdp.JointEffortActionCfg(
+        asset_name="robot", joint_names=["slider_to_cart"], scale=100.0
+    )
 
 
 @configclass
@@ -121,7 +123,10 @@ class RewardsCfg:
     pole_pos = RewTerm(
         func=mdp.joint_pos_target_l2,
         weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]), "target": 0.0},
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]),
+            "target": 0.0,
+        },
     )
     # (4) Shaping tasks: lower cart velocity
     cart_vel = RewTerm(
@@ -146,7 +151,10 @@ class TerminationsCfg:
     # (2) Cart out of bounds
     cart_out_of_bounds = DoneTerm(
         func=mdp.joint_pos_out_of_manual_limit,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]), "bounds": (-3.0, 3.0)},
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]),
+            "bounds": (-3.0, 3.0),
+        },
     )
 
 
@@ -158,7 +166,9 @@ class TerminationsCfg:
 @configclass
 class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
-    scene: B1RlLocomotionSceneCfg = B1RlLocomotionSceneCfg(num_envs=4096, env_spacing=4.0)
+    scene: B1RlLocomotionSceneCfg = B1RlLocomotionSceneCfg(
+        num_envs=4096, env_spacing=4.0
+    )
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
