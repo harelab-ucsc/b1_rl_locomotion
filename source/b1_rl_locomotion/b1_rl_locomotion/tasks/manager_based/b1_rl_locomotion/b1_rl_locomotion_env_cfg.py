@@ -47,7 +47,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     # robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
     robot: ArticulationCfg = B1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
 
-    contact_forces_upper_body = ContactSensorCfg(
+    contact_forces_body = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/b1_description/base",
         update_period=0.0,
         history_length=6,
@@ -202,7 +202,7 @@ class TerminationsCfg:
         func=mdp.illegal_contact,
         params={
             "threshold": 0.0,
-            "sensor_cfg": SceneEntityCfg("contact_forces_upper_body"),
+            "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
 
