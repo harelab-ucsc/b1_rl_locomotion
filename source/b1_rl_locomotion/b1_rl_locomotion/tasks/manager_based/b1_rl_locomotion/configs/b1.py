@@ -52,7 +52,7 @@ B1_CFG = ArticulationCfg(
         # visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.00, 0.01, 0.01))
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.56844),
+        pos=(0.0, 0.0, 0.76258),
         joint_pos={
             k: np.deg2rad(v).astype(
                 np.float32
@@ -83,30 +83,33 @@ B1_CFG = ArticulationCfg(
     #     ),
     # },
     actuators={  # taken from URDF
-        "hips": DCMotorCfg(
-            joint_names_expr=[".*_hip_joint"],
-            effort_limit=91.0,
-            saturation_effort=91.0,
-            velocity_limit=1128.15381,
-            stiffness=1144.46521,
-            damping=0.45779,
-        ),
-        "thighs": DCMotorCfg(
-            joint_names_expr=[".*_thigh_joint"],
-            effort_limit=93.33,
-            saturation_effort=93.33,
-            velocity_limit=1336.13745,
-            stiffness=399.15726,
-            damping=0.15966,
-        ),
-        "calves": DCMotorCfg(
-            joint_names_expr=[".*_calf_joint"],
-            effort_limit=140.0,
-            saturation_effort=140.0,
-            velocity_limit=890.94934,
-            stiffness=313.12537,
-            damping=0.12525,
-        ),
+        "all": ImplicitActuatorCfg(
+            joint_names_expr=[".*"], stiffness=None, damping=None
+        )
+        # "hips": ImplicitActuatorCfg(
+        #     joint_names_expr=[".*_hip_joint"],
+        #     # effort_limit_sim=91.0,
+        #     # saturation_effort=91.0,
+        #     # velocity_limit_sim=20,
+        #     stiffness=173.2,
+        #     damping=17.32,
+        # ),
+        # "thighs": ImplicitActuatorCfg(
+        #     joint_names_expr=[".*_thigh_joint"],
+        #     # effort_limit_sim=93.33,
+        #     # saturation_effort=93.33,
+        #     # velocity_limit_sim=20,
+        #     stiffness=173.2,
+        #     damping=17.32,
+        # ),
+        # "calves": ImplicitActuatorCfg(
+        #     joint_names_expr=[".*_calf_joint"],
+        #     # effort_limit_sim=140.0,
+        #     # saturation_effort=140.0,
+        #     # velocity_limit_sim=20,
+        #     stiffness=173.2,
+        #     damping=17.32,
+        # ),
     },
 )
 

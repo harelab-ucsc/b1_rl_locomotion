@@ -16,6 +16,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
+from isaaclab.sensors import ContactSensorCfg
 
 from . import mdp
 
@@ -38,13 +39,21 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     # ground plane
     ground = AssetBaseCfg(
         prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(size=(50.0, 50.0)),
+        spawn=sim_utils.GroundPlaneCfg(size=(500.0, 500.0)),
         init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),
     )
 
     # robot
     # robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
     robot: ArticulationCfg = B1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
+
+    contact_forces_upper_body = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/base",
+        update_period=0.0,
+        history_length=6,
+        debug_vis=True,
+        filter_prim_paths_expr=["/World/ground"],
+    )
 
     # lights
     dome_light = AssetBaseCfg(
@@ -89,7 +98,20 @@ class ActionsCfg:
 class CommandCfg:
     """Command specification"""
 
-    pass  # TODO: add a velocity command
+    velocity = mdp.UniformVelocityCommandCfg(
+        asset_name="robot",
+        heading_command=True,  # use heading instead of angular vel
+        rel_standing_envs=0.1,  # 10% of the time, stand still
+        rel_heading_envs=0.7,  # 70% of the time, use heading instead of angular z
+        ranges=mdp.UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(-1, 1),
+            lin_vel_y=(-1, 1),
+            ang_vel_z=(-math.pi / 4, math.pi / 4),  # 25 deg/s max
+            heading=(-math.pi, math.pi),
+        ),
+        resampling_time_range=(5, 10),
+        debug_vis=True,
+    )
 
 
 @configclass
@@ -103,6 +125,12 @@ class ObservationsCfg:
         # observation terms (order preserved)
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
+
+        # command
+        velocity_cmd = ObsTerm(
+            func=mdp.generated_commands, params={"command_name": "velocity"}
+        )
+        actions = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -169,6 +197,15 @@ class TerminationsCfg:
     # (1) Time out
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
+    # (2) Base touches the ground
+    falls_over = DoneTerm(
+        func=mdp.illegal_contact,
+        params={
+            "threshold": 0.0,
+            "sensor_cfg": SceneEntityCfg("contact_forces_upper_body"),
+        },
+    )
+
 
 ##
 # Environment configuration
@@ -195,7 +232,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 5
+        self.episode_length_s = 10
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 2.0)
         # simulation settings
