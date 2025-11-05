@@ -54,3 +54,20 @@ def position_command_error_tanh(
     distance = torch.norm(curr_pos_w - des_pos_w, dim=1)
     return 1 - torch.tanh(distance / std)
 
+
+def orientation_command_error(env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize tracking of the orientation error using L2-norm.
+
+    The function computes the orientation error between the desired orientation (from the command) and the
+    current orientation of the asset's body (in world frame). The orientation error is computed as the L2-norm
+    of the difference between the desired and current orientations.
+    """
+    # extract the asset (to enable type hinting)
+    asset: RigidObject = env.scene[asset_cfg.name]
+    command = env.command_manager.get_command(command_name)
+
+    des_orientation_b = command[:, 3:7]
+
+    _, des_orientation_w = combine_frame_transforms(asset.data.root_state_w[:, :3], asset.data.root_state_w[:, 3:7], q12=des_orientation_b)
+    curr_orientation_w = asset.data.body_state_w[:, asset_cfg.body_ids[0], 3:7]  # type: ignore
+    return quat_error_magnitude(des_orientation_w, curr_orientation_w)

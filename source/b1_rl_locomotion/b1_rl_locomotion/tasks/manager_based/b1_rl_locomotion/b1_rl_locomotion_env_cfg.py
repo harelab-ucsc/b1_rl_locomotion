@@ -159,8 +159,14 @@ class RewardsCfg:
     )
     end_effector_position_tracking_fine_grained = RewTerm(
         func=mdp.position_command_error_tanh,
-        weight=0.1,
+        weight=0.05,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=["ee_link"]), "std": 0.1, "command_name": "ee_pose"},
+    )
+
+    end_effector_orientation_tracking = RewTerm(
+        func=mdp.orientation_command_error,
+        weight=-0.01,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=["ee_link"]), "command_name": "ee_pose"},
     )
 
     # action penalty
@@ -180,8 +186,20 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -0.005, "num_steps": 4500}
     )
 
-    joint_vel = CurrTerm(
+    joint_vel1 = CurrTerm(
         func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -0.001, "num_steps": 4500}
+    )
+
+    joint_vel2 = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -0.002, "num_steps": 10000}
+    )
+
+    joint_vel3 = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -0.003, "num_steps": 15000}
+    )
+
+    end_effector_orientation_tracking = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "end_effector_orientation_tracking", "weight": -0.05, "num_steps": 4500}
     )
 
 
