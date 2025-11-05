@@ -54,19 +54,17 @@ B1_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.76258),
         joint_pos={
-            k: np.deg2rad(v).astype(
-                np.float32
-            )  # convert to rad. We work with degrees here
-            for k, v in {
-                "FL_hip_joint": 2.5,
-                "FR_hip_joint": -2.5,
-                "RL_hip_joint": 6.0,
-                "RR_hip_joint": -6.0,
-                "F[L,R]_thigh_joint": 30.0,
-                "R[L,R]_thigh_joint": 45.0,
-                "F[L,R]_calf_joint": -80.0,
-                "R[L,R]_calf_joint": -79.0,
-            }.items()
+            k: v*(np.pi / 180.0)  # convert to rad, the values below are in degrees
+                for k, v in {
+                    "FL_hip_joint": 2.5,
+                    "FR_hip_joint": -2.5,
+                    "RL_hip_joint": 6.0,
+                    "RR_hip_joint": -6.0,
+                    "F[L,R]_thigh_joint": 30.0,
+                    "R[L,R]_thigh_joint": 45.0,
+                    "F[L,R]_calf_joint": -80.0,
+                    "R[L,R]_calf_joint": -79.0,
+                }.items()
         },
         joint_vel={".*": 0.0},
     ),
