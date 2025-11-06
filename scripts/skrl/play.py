@@ -201,6 +201,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
     # https://skrl.readthedocs.io/en/latest/api/utils/runner.html
     experiment_cfg["trainer"]["close_environment_at_exit"] = False
     experiment_cfg["agent"]["experiment"]["write_interval"] = 0  # don't log to TensorBoard
+    experiment_cfg["agent"]["experiment"]["wandb"] = False  # don't log to wandb
     experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0  # don't generate checkpoints
     runner = Runner(env, experiment_cfg)
 
