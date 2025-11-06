@@ -17,6 +17,7 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg
 
 from . import mdp
 
@@ -56,15 +57,6 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
 
     contact_forces_thigh = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_thigh",
-        update_period=0.0,
-        history_length=6,
-        force_threshold=0.0,
-        debug_vis=True,
-        filter_prim_paths_expr=["/World/ground"],
-    )
-
-    contact_forces_calf = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_calf",
         update_period=0.0,
         history_length=6,
         force_threshold=0.0,
@@ -115,20 +107,35 @@ class ActionsCfg:
 class CommandCfg:
     """Command specification"""
 
-    velocity = mdp.UniformVelocityCommandCfg(
+    height = mdp.UniformPoseCommandCfg(   
         asset_name="robot",
-        heading_command=True,  # use heading instead of angular vel
-        rel_standing_envs=0.1,  # 10% of the time, stand still
-        rel_heading_envs=0.7,  # 70% of the time, use heading instead of angular z
-        ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1, 1),
-            lin_vel_y=(-1, 1),
-            ang_vel_z=(-math.pi / 4, math.pi / 4),  # 25 deg/s max
-            heading=(-math.pi, math.pi),
+        body_name="base",
+        ranges=mdp.UniformPoseCommandCfg.Ranges(
+            pos_x=(0, 0.0),
+            pos_y=(0.0, 0.0),
+            pos_z=(0.0, 0.81316),
+            roll=(0.0, 0.0),
+            pitch=(0, 0),
+            yaw=(0, 0),
         ),
-        resampling_time_range=(5, 10),
+        resampling_time_range=(10.0, 10.0),
         debug_vis=True,
     )
+   
+    # velocity = mdp.UniformVelocityCommandCfg(
+    #     asset_name="robot",
+    #     heading_command=True,  # use heading instead of angular vel
+    #     rel_standing_envs=0.1,  # 10% of the time, stand still
+    #     rel_heading_envs=0.7,  # 70% of the time, use heading instead of angular z
+    #     ranges=mdp.UniformVelocityCommandCfg.Ranges(
+    #         lin_vel_x=(-1, 1),
+    #         lin_vel_y=(-1, 1),
+    #         ang_vel_z=(-math.pi / 4, math.pi / 4),  # 25 deg/s max
+    #         heading=(-math.pi, math.pi),
+    #     ),
+    #     resampling_time_range=(5, 10),
+    #     debug_vis=True,
+    # )
 
 
 @configclass
@@ -142,11 +149,17 @@ class ObservationsCfg:
         # observation terms (order preserved)
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
-
+        base_pos_z_rel = ObsTerm(func=mdp.base_pos_z)
         # command
-        velocity_cmd = ObsTerm(
-            func=mdp.generated_commands, params={"command_name": "velocity"}
+        # velocity_cmd = ObsTerm(
+        #     func=mdp.generated_commands, params={"command_name": "velocity"}
+        # )
+
+        # height command
+        height_cmd = ObsTerm(
+            func=mdp.generated_commands, params={"command_name": "height"}
         )
+
         actions = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self) -> None:
@@ -168,7 +181,7 @@ class EventCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
             "position_range": (-0.5, 0.5),
-            "velocity_range": (-0.25, 0.25),
+            "velocity_range": (-0.0, 0.0),
         },
     )
 
@@ -200,13 +213,39 @@ class EventCfg:
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
+    
+    # Track base height (CoM)
+    base_com_height = RewTerm(
+        func=mdp.base_height_l2_from_command,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+            "command_name": "height",
+        },
+        weight=1.0,
+    )
 
-    # (1) Constant running reward
-    alive = RewTerm(func=mdp.is_alive, weight=1.0)
-    # (2) Failure penalty
-    terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
-    # thigh contact
-    thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 0.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
+    # Track base velocity (CoM)
+    base_ang_vel_xy = RewTerm(
+        func=mdp.ang_vel_xy_l2,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+        },
+        weight=-0.5,
+    )
+
+    # Combined tracking term (if desired)
+    base_flat_orientation = RewTerm(
+        func=mdp.flat_orientation_l2,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+        },
+        weight=0.1,
+    )
+
+    # # (1) Constant running reward
+    # alive = RewTerm(func=mdp.is_alive, weight=1.0)
+    # # (2) Failure penalty
+    # terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
 
 
 @configclass
@@ -257,6 +296,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
+        self.observations.policy.enable_corruption = True
 
 
 @configclass
