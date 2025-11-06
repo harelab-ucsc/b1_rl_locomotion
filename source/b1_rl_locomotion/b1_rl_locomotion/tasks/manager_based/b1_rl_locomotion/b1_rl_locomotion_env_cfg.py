@@ -55,6 +55,15 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=["/World/ground"],
     )
 
+    contact_forces_thigh = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_thigh",
+        update_period=0.0,
+        history_length=6,
+        force_threshold=0.0,
+        debug_vis=True,
+        filter_prim_paths_expr=["/World/ground"],
+    )
+
     # lights
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
@@ -188,6 +197,8 @@ class RewardsCfg:
     alive = RewTerm(func=mdp.is_alive, weight=1.0)
     # (2) Failure penalty
     terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+    # thigh contact
+    thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 0.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
 
 
 @configclass
