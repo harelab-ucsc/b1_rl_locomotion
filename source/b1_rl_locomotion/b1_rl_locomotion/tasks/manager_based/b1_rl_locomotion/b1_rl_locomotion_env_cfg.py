@@ -63,6 +63,15 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=["/World/ground"],
     )
 
+    contact_forces_calf = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_calf",
+        update_period=0.0,
+        history_length=6,
+        force_threshold=0.0,
+        debug_vis=True,
+        filter_prim_paths_expr=["/World/ground"],
+    )
+
     # lights
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
