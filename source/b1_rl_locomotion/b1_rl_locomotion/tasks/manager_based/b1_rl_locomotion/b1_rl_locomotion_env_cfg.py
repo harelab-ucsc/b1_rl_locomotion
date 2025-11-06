@@ -24,7 +24,6 @@ from . import mdp
 # Pre-defined configs
 ##
 
-# from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
 from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_CFG
 
 ##
