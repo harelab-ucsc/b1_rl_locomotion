@@ -16,6 +16,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
+from isaaclab.sensors import ContactSensorCfg
 
 from . import mdp
 
@@ -23,8 +24,7 @@ from . import mdp
 # Pre-defined configs
 ##
 
-from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
-
+from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_CFG
 
 ##
 # Scene definition
@@ -38,16 +38,35 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     # ground plane
     ground = AssetBaseCfg(
         prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(size=(100.0, 100.0)),
+        spawn=sim_utils.GroundPlaneCfg(size=(500.0, 500.0)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),
     )
 
     # robot
-    robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    # robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
+    robot: ArticulationCfg = B1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
+
+    contact_forces_body = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/base",
+        update_period=0.0,
+        history_length=6,
+        debug_vis=True,
+        filter_prim_paths_expr=["/World/ground"],
+    )
+
+    contact_forces_thigh = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_thigh",
+        update_period=0.0,
+        history_length=6,
+        force_threshold=0.0,
+        debug_vis=True,
+        filter_prim_paths_expr=["/World/ground"],
+    )
 
     # lights
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
-        spawn=sim_utils.DomeLightCfg(color=(0.9, 0.9, 0.9), intensity=500.0),
+        spawn=sim_utils.DomeLightCfg(intensity=5000.0),
     )
 
 
@@ -60,7 +79,47 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointEffortActionCfg(asset_name="robot", joint_names=["slider_to_cart"], scale=100.0)
+    joint_effort = mdp.JointPositionActionCfg(
+        asset_name="robot",
+        joint_names=[  # FL -> FR -> RL -> RR  and  hip -> thigh -> calf
+            "FL_hip_joint",
+            "FL_thigh_joint",
+            "FL_calf_joint",
+            "FR_hip_joint",
+            "FR_thigh_joint",
+            "FR_calf_joint",
+            "RL_hip_joint",
+            "RL_thigh_joint",
+            "RL_calf_joint",
+            "RR_hip_joint",
+            "RR_thigh_joint",
+            "RR_calf_joint",
+        ],
+        use_default_offset=True,
+        scale=1.0,
+        preserve_order=True,  # keep on for model transfer
+        debug_vis=True,
+    )
+
+
+@configclass
+class CommandCfg:
+    """Command specification"""
+
+    velocity = mdp.UniformVelocityCommandCfg(
+        asset_name="robot",
+        heading_command=True,  # use heading instead of angular vel
+        rel_standing_envs=0.1,  # 10% of the time, stand still
+        rel_heading_envs=0.7,  # 70% of the time, use heading instead of angular z
+        ranges=mdp.UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(-1, 1),
+            lin_vel_y=(-1, 1),
+            ang_vel_z=(-math.pi / 4, math.pi / 4),  # 25 deg/s max
+            heading=(-math.pi, math.pi),
+        ),
+        resampling_time_range=(5, 10),
+        debug_vis=True,
+    )
 
 
 @configclass
@@ -75,6 +134,12 @@ class ObservationsCfg:
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
 
+        # command
+        velocity_cmd = ObsTerm(
+            func=mdp.generated_commands, params={"command_name": "velocity"}
+        )
+        actions = ObsTerm(func=mdp.last_action)
+
         def __post_init__(self) -> None:
             self.enable_corruption = False
             self.concatenate_terms = True
@@ -88,23 +153,37 @@ class EventCfg:
     """Configuration for events."""
 
     # reset
-    reset_cart_position = EventTerm(
+    reset_all_joints = EventTerm(
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]),
-            "position_range": (-1.0, 1.0),
-            "velocity_range": (-0.5, 0.5),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
+            "position_range": (-0.5, 0.5),
+            "velocity_range": (-0.25, 0.25),
         },
     )
 
-    reset_pole_position = EventTerm(
-        func=mdp.reset_joints_by_offset,
+    reset_robot_pos = EventTerm(
+        func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]),
-            "position_range": (-0.25 * math.pi, 0.25 * math.pi),
-            "velocity_range": (-0.25 * math.pi, 0.25 * math.pi),
+            "asset_cfg": SceneEntityCfg("robot"),
+            "pose_range": {
+                "x": (-0.5, 0.5),
+                "y": (-0.5, 0.5),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (-math.pi, math.pi),
+            },
+            "velocity_range": {
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            },
         },
     )
 
@@ -117,24 +196,8 @@ class RewardsCfg:
     alive = RewTerm(func=mdp.is_alive, weight=1.0)
     # (2) Failure penalty
     terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
-    # (3) Primary task: keep pole upright
-    pole_pos = RewTerm(
-        func=mdp.joint_pos_target_l2,
-        weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]), "target": 0.0},
-    )
-    # (4) Shaping tasks: lower cart velocity
-    cart_vel = RewTerm(
-        func=mdp.joint_vel_l1,
-        weight=-0.01,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"])},
-    )
-    # (5) Shaping tasks: lower pole angular velocity
-    pole_vel = RewTerm(
-        func=mdp.joint_vel_l1,
-        weight=-0.005,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"])},
-    )
+    # thigh contact
+    thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 0.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
 
 
 @configclass
@@ -143,10 +206,14 @@ class TerminationsCfg:
 
     # (1) Time out
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    # (2) Cart out of bounds
-    cart_out_of_bounds = DoneTerm(
-        func=mdp.joint_pos_out_of_manual_limit,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]), "bounds": (-3.0, 3.0)},
+
+    # (2) Base touches the ground
+    falls_over = DoneTerm(
+        func=mdp.illegal_contact,
+        params={
+            "threshold": 0.0,
+            "sensor_cfg": SceneEntityCfg("contact_forces_body"),
+        },
     )
 
 
@@ -158,8 +225,11 @@ class TerminationsCfg:
 @configclass
 class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
-    scene: B1RlLocomotionSceneCfg = B1RlLocomotionSceneCfg(num_envs=4096, env_spacing=4.0)
+    scene: B1RlLocomotionSceneCfg = B1RlLocomotionSceneCfg(
+        num_envs=512, env_spacing=3.0
+    )
     # Basic settings
+    commands: CommandCfg = CommandCfg()
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     events: EventCfg = EventCfg()
@@ -172,9 +242,22 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 5
+        self.episode_length_s = 10
         # viewer settings
-        self.viewer.eye = (8.0, 0.0, 5.0)
+        self.viewer.eye = (8.0, 0.0, 2.0)
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
+
+
+@configclass
+class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
+    def __post_init__(self) -> None:
+        super().__post_init__()
+
+        """Post initialization."""
+        # general settings
+        self.scene.num_envs = 10
+        self.scene.env_spacing = 3.0
+        # disable noise
+        self.observations.policy.enable_corruption = False
