@@ -148,6 +148,7 @@ class ObservationsCfg:
             func=mdp.generated_commands, params={"command_name": "velocity"}
         )
         actions = ObsTerm(func=mdp.last_action)
+        gravity = ObsTerm(func=mdp.projected_gravity)
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -201,10 +202,34 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # (1) Constant running reward
-    alive = RewTerm(func=mdp.is_alive, weight=1.0)
-    # (2) Failure penalty
-    terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+    # Constant running reward
+    # alive = RewTerm(func=mdp.is_alive, weight=1.0)
+
+    # Failure penalty
+    terminating = RewTerm(func=mdp.is_terminated, weight=-1)
+
+    # Action rate
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+
+    # angular velocity xy (i.e. rotating sideways)
+    angle_vel_xy = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+
+    # velocity z (i.e moving up down a lot)
+    vel_z = RewTerm(func=mdp.lin_vel_z_l2, weight=-0.5)
+
+    # Base Height, works without sensors for FLAT TERRAIN ONLY
+    # base_height = RewTerm(func=mdp.base_height_l2, weight=-0.05, params={"target_height": 0.5, "asset_cfg": SceneEntityCfg("robot")})
+
+    # Flat Orientation
+    # flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-0.1)
+
+    # Command Tracking
+    lin_vel_tracking = RewTerm(func=mdp.track_lin_vel_xy_exp, weight=1, params={"std": 1.0, "command_name": "velocity", "asset_cfg": SceneEntityCfg("robot")})
+    angle_vel_tracking = RewTerm(func=mdp.track_ang_vel_z_exp, weight=1, params={"std": 1.0, "command_name": "velocity", "asset_cfg": SceneEntityCfg("robot")})
+
+    # torques
+    torques = RewTerm(func=mdp.joint_torques_l2, weight=-0.01)
+
     # thigh contact
     thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 0.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
 
