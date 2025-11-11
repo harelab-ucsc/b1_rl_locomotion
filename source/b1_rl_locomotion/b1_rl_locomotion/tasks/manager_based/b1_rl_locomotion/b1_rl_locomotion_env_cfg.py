@@ -106,14 +106,15 @@ class ActionsCfg:
 @configclass
 class CommandCfg:
     """Command specification"""
-
+    
+    # height command
     height = mdp.UniformPoseCommandCfg(   
         asset_name="robot",
         body_name="base",
         ranges=mdp.UniformPoseCommandCfg.Ranges(
             pos_x=(0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.0, 0.81316),
+            pos_z=(0.2, 0.81316),
             roll=(0.0, 0.0),
             pitch=(0, 0),
             yaw=(0, 0),
@@ -121,7 +122,7 @@ class CommandCfg:
         resampling_time_range=(10.0, 10.0),
         debug_vis=True,
     )
-   
+    
     # velocity = mdp.UniformVelocityCommandCfg(
     #     asset_name="robot",
     #     heading_command=True,  # use heading instead of angular vel
@@ -149,7 +150,7 @@ class ObservationsCfg:
         # observation terms (order preserved)
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
-        base_pos_z_rel = ObsTerm(func=mdp.base_pos_z)
+
         # command
         # velocity_cmd = ObsTerm(
         #     func=mdp.generated_commands, params={"command_name": "velocity"}
@@ -180,7 +181,7 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
-            "position_range": (-0.5, 0.5),
+            "position_range": (-0.2, 0.2),
             "velocity_range": (-0.0, 0.0),
         },
     )
@@ -221,7 +222,7 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
             "command_name": "height",
         },
-        weight=1.0,
+        weight=0.5,
     )
 
     # Track base velocity (CoM)
@@ -230,7 +231,7 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=-0.5,
+        weight=-0.1,
     )
 
     # Combined tracking term (if desired)
@@ -239,7 +240,15 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=0.1,
+        weight=-0.1,
+    )
+    
+    base_x_y_diff = RewTerm(
+        func=mdp.base_x_y_diff,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+        },
+        weight=-1,    
     )
 
     # # (1) Constant running reward

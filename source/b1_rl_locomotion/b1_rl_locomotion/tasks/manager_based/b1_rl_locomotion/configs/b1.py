@@ -51,71 +51,70 @@ B1_CFG = ArticulationCfg(
         ),
         # visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.00, 0.01, 0.01))
     ),
-    ### Default Joint Values for different States
-    # Standing Joint pos
-    # FR_hip_joint -0.018275
-    # FR_thigh_joint 0.734231
-    # FR_calf_joint -1.378738
 
-    # FL_hip_joint 0.033276
-    # FL_thigh_joint 0.711885
-    # FL_calf_joint -1.356828
-
-    # RR_hip_joint -0.016240
-    # RR_thigh_joint 0.755382
-    # RR_calf_joint -1.407461
-
-    # RL_hip_joint 0.031771
-    # RL_thigh_joint 0.742019
-    # RL_calf_joint -1.385845
-    # lying down but with thighs up:
-    # FR_hip_joint -0.578783
-    # FR_thigh_joint 1.471383
-    # FR_calf_joint -2.750345
-
-    # FL_hip_joint 0.570375
-    # FL_thigh_joint 1.471515
-    # FL_calf_joint -2.738487
-
-    # RR_hip_joint -0.590774
-    # RR_thigh_joint 1.463904
-    # RR_calf_joint -2.622220
-
-    # RL_hip_joint 0.566924
-    # RL_thigh_joint 1.467400
-    # RL_calf_joint -2.626244
-    # lying down with thighs down (initial position)
-    # FR_hip_joint -0.558384
-    # FR_thigh_joint 1.078270
-    # FR_calf_joint -2.751709
-
-    # FL_hip_joint 0.534135
-    # FL_thigh_joint 1.089023
-    # FL_calf_joint -2.739185
-
-    # RR_hip_joint -0.584137
-    # RR_thigh_joint 1.067164
-    # RR_calf_joint -2.622180
-
-    # RL_hip_joint 0.544445
-    # RL_thigh_joint 1.051190
-    # RL_calf_joint -2.626244
 
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.76258),
+        pos=(0.0, 0.0, 0.46258),
+        # Option 1: Standing Joint pos (values in radians)
         joint_pos={
-            k: v*(np.pi / 180.0)  # convert to rad, the values below are in degrees
-                for k, v in {
-                    "FL_hip_joint": 2.5,
-                    "FR_hip_joint": -2.5,
-                    "RL_hip_joint": 6.0,
-                    "RR_hip_joint": -6.0,
-                    "F[L,R]_thigh_joint": 30.0,
-                    "R[L,R]_thigh_joint": 45.0,
-                    "F[L,R]_calf_joint": -80.0,
-                    "R[L,R]_calf_joint": -79.0,
-                }.items()
+            "FR_hip_joint": -0.018275,
+            "FR_thigh_joint": 0.734231,
+            "FR_calf_joint": -1.378738,
+            "FL_hip_joint": 0.033276,
+            "FL_thigh_joint": 0.711885,
+            "FL_calf_joint": -1.356828,
+            "RR_hip_joint": -0.016240,
+            "RR_thigh_joint": 0.755382,
+            "RR_calf_joint": -1.407461,
+            "RL_hip_joint": 0.031771,
+            "RL_thigh_joint": 0.742019,
+            "RL_calf_joint": -1.385845,
         },
+
+        # Option 2: Lying down with thighs up (values in radians)
+        # joint_pos={
+        #     "FR_hip_joint": -0.578783,
+        #     "FR_thigh_joint": 1.471383,
+        #     "FR_calf_joint": -2.750345,
+        #     "FL_hip_joint": 0.570375,
+        #     "FL_thigh_joint": 1.471515,
+        #     "FL_calf_joint": -2.738487,
+        #     "RR_hip_joint": -0.590774,
+        #     "RR_thigh_joint": 1.463904,
+        #     "RR_calf_joint": -2.622220,
+        #     "RL_hip_joint": 0.566924,
+        #     "RL_thigh_joint": 1.467400,
+        #     "RL_calf_joint": -2.626244,
+        # },
+
+        # Option 3: Lying down with thighs down (initial position) (values in radians)
+        # joint_pos={
+        #     "FR_hip_joint": -0.558384,
+        #     "FR_thigh_joint": 1.078270,
+        #     "FR_calf_joint": -2.751709,
+        #     "FL_hip_joint": 0.534135,
+        #     "FL_thigh_joint": 1.089023,
+        #     "FL_calf_joint": -2.739185,
+        #     "RR_hip_joint": -0.584137,
+        #     "RR_thigh_joint": 1.067164,
+        #     "RR_calf_joint": -2.622180,
+        #     "RL_hip_joint": 0.544445,
+        #     "RL_thigh_joint": 1.051190,
+        #     "RL_calf_joint": -2.626244,
+        # },
+        # joint_pos={
+        #     k: v*(np.pi / 180.0)  # convert to rad, the values below are in degrees
+        #         for k, v in {
+        #             "FL_hip_joint": 2.5,
+        #             "FR_hip_joint": -2.5,
+        #             "RL_hip_joint": 6.0,
+        #             "RR_hip_joint": -6.0,
+        #             "F[L,R]_thigh_joint": 30.0,
+        #             "R[L,R]_thigh_joint": 45.0,
+        #             "F[L,R]_calf_joint": -80.0,
+        #             "R[L,R]_calf_joint": -79.0,
+        #         }.items()
+        # },
         joint_vel={".*": 0.0},
     ),
     soft_joint_pos_limit_factor=0.9,

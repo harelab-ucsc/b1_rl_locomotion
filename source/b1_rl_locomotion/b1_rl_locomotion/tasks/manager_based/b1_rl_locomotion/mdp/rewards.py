@@ -10,9 +10,10 @@ from typing import TYPE_CHECKING
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import wrap_to_pi, quat_from_euler_xyz, euler_xyz_from_quat
+from isaaclab.utils.math import combine_frame_transforms
 from isaaclab.envs.mdp.rewards import *
-
+from isaaclab.assets import RigidObject
+   
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -37,27 +38,46 @@ def base_height_l2_from_command(
     Returns:
         The L2 squared penalty for height deviation.
     """
-    # Get the command from the command manager (returns a tensor)
+    # Get pose command: [x, y, z, qx, qy, qz, qw]
     command = env.command_manager.get_command(command_name)
-    # Extract the target height (z-coordinate) from the pose command
-    # Pose command tensor shape is [num_envs, 7] with [x, y, z, qx, qy, qz, qw]
-    # So index 2 is the z-coordinate (height)
-    target_height = command[:, 2]  # z-coordinate for all environments
-    
-    # Use the base_height_l2 function with the target height
-    # Note: base_height_l2 expects a scalar target_height, but we have a per-env tensor
-    # So we need to compute it per environment
-    from isaaclab.assets import RigidObject
+    asset: RigidObject = env.scene[asset_cfg.name]
+
+    # Desired position in base (body) frame — shape [num_envs, 3]
+    des_pos_b = command[:, :3]
+
+    # Transform desired pose from body → world frame
+    des_pose_w, _ = combine_frame_transforms(
+        asset.data.root_state_w[:, :3],   # world position of body origin
+        asset.data.root_state_w[:, 3:7],  # world orientation
+        des_pos_b,                        # desired pos (body frame)
+    )
+
+    # Current CoM world position of the base (rigid body center of mass)
+    curr_pos_w = asset.data.body_com_pose_w[:, asset_cfg.body_ids[0], :3] # type: ignore
+    # Compute per-env L2 position deviation
+    pos_error = torch.norm(curr_pos_w - des_pose_w, dim=1)
+
+    # Optionally, only height deviation (uncomment to isolate Z):
+    # pos_error = torch.abs(curr_pos_w[:, 2] - des_pos_w[:, 2])
+    return pos_error
+
+
+def base_x_y_diff(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize base x and y position deviation from zero."""
     asset: RigidObject = env.scene[asset_cfg.name]
     
-    if sensor_cfg is not None:
-        from isaaclab.sensors import RayCaster
-        sensor: RayCaster = env.scene[sensor_cfg.name]
-        # Adjust the target height using the sensor data
-        adjusted_target_height = target_height + torch.mean(sensor.data.ray_hits_w[..., 2], dim=1)
-    else:
-        # Use the provided target height directly for flat terrain
-        adjusted_target_height = target_height
+    # CoM pose in body frame: shape [N, 1, 7]
+    body_com_pose_b = asset.data.body_com_pose_b  # local CoM offset (body frame)
+    com_offset_b = body_com_pose_b[:, 0, :3]      # only (x, y, z) offset
     
-    # Compute the L2 squared penalty per environment
-    return torch.square(asset.data.root_pos_w[:, 2] - adjusted_target_height)
+    # Root link position in world frame
+    root_pos_w = asset.data.root_link_pos_w  # shape [N, 3]
+
+    # Compute XY squared difference between world pos and CoM offset (projected)
+    diff_xy = torch.square(root_pos_w[:, :2] - com_offset_b[:, :2])
+
+    # Return per-env scalar (sum of x² + y²)
+    return torch.sum(diff_xy, dim=1)
