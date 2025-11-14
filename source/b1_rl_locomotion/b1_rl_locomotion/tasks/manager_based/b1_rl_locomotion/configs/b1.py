@@ -54,7 +54,7 @@ B1_CFG = ArticulationCfg(
 
 
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.46258),
+        pos=(0.0, 0.0, 0.76258),
         # Option 1: Standing Joint pos (values in radians)
         joint_pos={
             "FR_hip_joint": -0.018275,
