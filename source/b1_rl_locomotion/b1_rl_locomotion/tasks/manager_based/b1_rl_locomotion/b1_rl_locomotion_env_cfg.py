@@ -65,13 +65,14 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     )
 
     contact_forces_feet = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_foot",    # to be changed to correct naming scheme
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_foot",  # to be changed to correct naming scheme
         update_period=0.0,
         history_length=6,
         force_threshold=0.0,
         debug_vis=True,
         filter_prim_paths_expr=["/World/ground"],
     )
+
     # lights
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
@@ -114,13 +115,13 @@ class ActionsCfg:
 @configclass
 class CommandCfg:
     """Command specification"""
-    
+
     # height command
-    height = mdp.UniformPoseCommandCfg(   
+    height = mdp.UniformPoseCommandCfg(
         asset_name="robot",
         body_name="base",
         ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0, 0.0),
+            pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
             pos_z=(0.2, 0.81316),
             roll=(0.0, 0.0),
@@ -130,15 +131,12 @@ class CommandCfg:
         resampling_time_range=(10.0, 10.0),
         debug_vis=True,
     )
-    
+
     ############################################################
     # TODO: updated position command, (this may not be needed)
-    
-    
-    
+
     ############################################################
-    
-    
+
     # velocity = mdp.UniformVelocityCommandCfg(
     #     asset_name="robot",
     #     heading_command=True,  # use heading instead of angular vel
@@ -230,7 +228,7 @@ class EventCfg:
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
-    
+
     # Track base height (CoM)
     base_com_height = RewTerm(
         func=mdp.base_height_l2_from_command,
@@ -258,13 +256,13 @@ class RewardsCfg:
         },
         weight=-0.1,
     )
-    
+
     base_x_y_diff = RewTerm(
         func=mdp.base_x_y_diff,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=-1,    
+        weight=-1,
     )
 
     ############################################################
@@ -274,17 +272,13 @@ class RewardsCfg:
     #   TODO: update b1.usd to include sensors for feet
     #       TODO: update contact_forces_feet to match sensors in b1.usd
     #
-    
+
     feet_contacting_ground = RewTerm(
         func=mdp.desired_contacts,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces_feet")
-        },
+        params={"sensor_cfg": SceneEntityCfg("contact_forces_feet")},
         weight=1.0,
     )
     ############################################################
-
-
 
     # # (1) Constant running reward
     # alive = RewTerm(func=mdp.is_alive, weight=1.0)
