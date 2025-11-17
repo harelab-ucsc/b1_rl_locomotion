@@ -12,6 +12,7 @@ from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
@@ -55,7 +56,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=["/World/ground"],
     )
 
-    contact_forces_thigh = ContactSensorCfg(
+    contact_forces_thighs = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_thigh",
         update_period=0.0,
         history_length=6,
@@ -65,7 +66,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     )
 
     contact_forces_feet = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_foot",  # to be changed to correct naming scheme
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_foot",
         update_period=0.0,
         history_length=6,
         force_threshold=0.0,
@@ -117,18 +118,18 @@ class CommandCfg:
     """Command specification"""
 
     # height command
-    height = mdp.UniformPoseCommandCfg(
+    height = mdp.UniformPoseCommandAbsoluteCfg(
         asset_name="robot",
         body_name="base",
-        ranges=mdp.UniformPoseCommandCfg.Ranges(
+        ranges=mdp.UniformPoseCommandAbsoluteCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.2, 0.81316),
+            pos_z=(0.2, 0.81316),  # 20cm to max height
             roll=(0.0, 0.0),
             pitch=(0, 0),
             yaw=(0, 0),
         ),
-        resampling_time_range=(10.0, 10.0),
+        resampling_time_range=(5.0, 5.0),
         debug_vis=True,
     )
 
@@ -165,6 +166,17 @@ class ObservationsCfg:
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
 
+        # relevant IMU data
+        # imu_ang_vel = ObsTerm(
+        #     func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("robot")}
+        # )
+        # imu_lin_acc = ObsTerm(
+        #     func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("robot")}
+        # )
+        base_height = ObsTerm(
+            func=mdp.base_pos_z, params={"asset_cfg": SceneEntityCfg("robot")}
+        )
+
         # command
         # velocity_cmd = ObsTerm(
         #     func=mdp.generated_commands, params={"command_name": "velocity"}
@@ -178,7 +190,7 @@ class ObservationsCfg:
         actions = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self) -> None:
-            self.enable_corruption = False
+            self.enable_corruption = False  # TODO: turn on later
             self.concatenate_terms = True
 
     # observation groups
@@ -231,21 +243,32 @@ class RewardsCfg:
 
     # Track base height (CoM)
     base_com_height = RewTerm(
-        func=mdp.base_height_l2_from_command,
+        func=mdp.base_height_from_command,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
             "command_name": "height",
+        },
+        weight=1,
+    )
+
+    base_com_height_fine = RewTerm(
+        func=mdp.base_height_from_command,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+            "command_name": "height",
+            "use_tanh": True,
+            "tanh_scale": 0.1,  # d/dx f(x) = -1 at around x=18cm, where d/dx f(x) = -10 sech^2(x/0.1)
         },
         weight=0.5,
     )
 
     # Track base velocity (CoM)
-    base_ang_vel_xy = RewTerm(
-        func=mdp.ang_vel_xy_l2,
+    base_lin_vel_xy = RewTerm(
+        func=mdp.body_lin_vel_l2,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=-0.1,
+        weight=-0.005,
     )
 
     # Combined tracking term (if desired)
@@ -254,16 +277,16 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=-0.1,
+        weight=-0.15,
     )
 
-    base_x_y_diff = RewTerm(
-        func=mdp.base_x_y_diff,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
-        },
-        weight=-1,
-    )
+    # base_x_y_diff = RewTerm(
+    #     func=mdp.base_x_y_diff,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #     },
+    #     weight=-1,
+    # )
 
     ############################################################
     #   TODO: Reward for feet contacting the ground
@@ -273,17 +296,54 @@ class RewardsCfg:
     #       TODO: update contact_forces_feet to match sensors in b1.usd
     #
 
+    # Center the hips
+    center_hips = RewTerm(
+        func=mdp.center_joints_pos,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_joint"])},
+        weight=-0.1,
+    )
+
     feet_contacting_ground = RewTerm(
         func=mdp.desired_contacts,
         params={"sensor_cfg": SceneEntityCfg("contact_forces_feet")},
-        weight=1.0,
+        weight=-0.15,
     )
     ############################################################
 
     # # (1) Constant running reward
     # alive = RewTerm(func=mdp.is_alive, weight=1.0)
-    # # (2) Failure penalty
-    # terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+
+    # (2) Failure penalty
+    terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+
+
+@configclass
+class CurriculumsCfg:
+    """Curriculum settings for the MDP."""
+
+    # set center_hips very high at the start, then lower it over time
+    center_hips = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "center_hips",
+            "w0": -0.5,
+            "w1": -0.1,
+            "t0": 0,
+            "t1": 5000,
+        },
+    )
+
+    # increase lin vel penalty over time
+    base_lin_vel_xy = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "base_lin_vel_xy",
+            "w0": -0.005,
+            "w1": -0.05,
+            "t0": 3000,
+            "t1": 8000,
+        },
+    )
 
 
 @configclass
@@ -322,6 +382,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
+    curriculums: CurriculumsCfg = CurriculumsCfg()
 
     # Post initialization
     def __post_init__(self) -> None:

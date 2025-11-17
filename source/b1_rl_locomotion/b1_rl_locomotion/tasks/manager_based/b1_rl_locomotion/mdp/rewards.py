@@ -13,53 +13,96 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import combine_frame_transforms
 from isaaclab.envs.mdp.rewards import *
 from isaaclab.assets import RigidObject
-   
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
-def base_height_l2_from_command(
+def base_height_from_command(
     env: ManagerBasedRLEnv,
     command_name: str,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    sensor_cfg: SceneEntityCfg | None = None,
+    use_tanh: bool = False,  # when True, applies tanh to height error (becomes a reward instead of a penalty)
+    tanh_scale: float = 0.1,  # d/dx f(x) = -1 at around x=18cm if scale=0.1, where f(x)=1-tanh(x/tanh_scale)
 ) -> torch.Tensor:
-    """Penalize asset height deviation from command target using L2 squared kernel.
-    
-    This function retrieves the target height from a pose command and uses it
-    with the base_height_l2 reward function.
-    
+    """Penalize asset height deviation from command target.
+
+    This function retrieves the target height from a pose command and computes
+    the diff between the asset's current center of mass (CoM) height and the desired height.
+
     Args:
         env: The environment instance.
         command_name: Name of the command to retrieve the target height from.
         asset_cfg: Configuration for the asset to track.
         sensor_cfg: Optional sensor configuration for terrain adjustment.
-        
+
     Returns:
-        The L2 squared penalty for height deviation.
+        The per-environment height deviation as a tensor of shape [num_envs].
     """
     # Get pose command: [x, y, z, qx, qy, qz, qw]
     command = env.command_manager.get_command(command_name)
-    asset: RigidObject = env.scene[asset_cfg.name]
+    robot: RigidObject = env.scene[asset_cfg.name]
 
     # Desired position in base (body) frame — shape [num_envs, 3]
     des_pos_b = command[:, :3]
 
     # Transform desired pose from body → world frame
     des_pose_w, _ = combine_frame_transforms(
-        asset.data.root_state_w[:, :3],   # world position of body origin
-        asset.data.root_state_w[:, 3:7],  # world orientation
-        des_pos_b,                        # desired pos (body frame)
+        robot.data.root_state_w[:, :3],  # world position of body origin
+        robot.data.root_state_w[:, 3:7],  # world orientation
+        des_pos_b,  # desired pos (body frame)
     )
 
     # Current CoM world position of the base (rigid body center of mass)
-    curr_pos_w = asset.data.body_com_pose_w[:, asset_cfg.body_ids[0], :3] # type: ignore
-    # Compute per-env L2 position deviation
-    pos_error = torch.norm(curr_pos_w - des_pose_w, dim=1)
+    curr_pos_w = robot.data.body_com_pose_w[:, asset_cfg.body_ids[0], :3]  # type: ignore
+    # Compute per-env L2 height deviation (ignore xy)
+    # pos_error = torch.norm(curr_pos_w - des_pose_w, dim=1)
+    height_err = torch.abs(curr_pos_w[:, 2] - des_pose_w[:, 2])
 
-    # Optionally, only height deviation (uncomment to isolate Z):
-    # pos_error = torch.abs(curr_pos_w[:, 2] - des_pos_w[:, 2])
-    return pos_error
+    # Debug prints
+    print("-------------------------------")
+    print("Desired base position (body):")
+    print(des_pos_b)
+    print("Desired base position (world):")
+    print(des_pose_w)
+    print("Current base CoM position (world):")
+    print(curr_pos_w)
+    print("Height error:")
+    print(height_err)
+
+    if use_tanh:
+        # Apply tanh to convert to a reward (higher is better)
+        height_err = 1 - torch.tanh(height_err / tanh_scale)
+
+    return height_err
+
+
+def body_lin_vel_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize body linear velocity L2 norm (don't move). Reurns a positive value (the norm)."""
+    robot: RigidObject = env.scene[asset_cfg.name]
+
+    # Compute L2 norm of linear velocity
+    lin_vel = robot.data.root_state_w[:, 7:9]  # ignore z velocity
+    lin_vel_l2 = torch.norm(lin_vel, dim=1)
+
+    return lin_vel_l2
+
+
+def center_joints_pos(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=[".*_hip_joint"]),
+) -> torch.Tensor:
+    """Penalize joint position deviation from center (0.0)."""
+    robot: Articulation = env.scene[asset_cfg.name]
+
+    joint_pos = robot.data.joint_pos[:, asset_cfg.joint_ids]
+    pos_diff = torch.square(joint_pos)  # squared difference from zero
+
+    # Return per-env scalar (sum over all joints)
+    return torch.max(pos_diff, dim=1).values
 
 
 def base_x_y_diff(
@@ -68,11 +111,11 @@ def base_x_y_diff(
 ) -> torch.Tensor:
     """Penalize base x and y position deviation from zero."""
     asset: RigidObject = env.scene[asset_cfg.name]
-    
+
     # CoM pose in body frame: shape [N, 1, 7]
     body_com_pose_b = asset.data.body_com_pose_b  # local CoM offset (body frame)
-    com_offset_b = body_com_pose_b[:, 0, :3]      # only (x, y, z) offset
-    
+    com_offset_b = body_com_pose_b[:, 0, :3]  # only (x, y, z) offset
+
     # Root link position in world frame
     root_pos_w = asset.data.root_link_pos_w  # shape [N, 3]
 
