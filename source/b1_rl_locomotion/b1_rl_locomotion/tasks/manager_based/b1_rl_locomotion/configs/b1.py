@@ -54,21 +54,21 @@ B1_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.76258),
         joint_pos={
-            k: v*(np.pi / 180.0)  # convert to rad, the values below are in degrees
-                for k, v in {
-                    "FL_hip_joint": 2.5,
-                    "FR_hip_joint": -2.5,
-                    "RL_hip_joint": 6.0,
-                    "RR_hip_joint": -6.0,
-                    "F[L,R]_thigh_joint": 30.0,
-                    "R[L,R]_thigh_joint": 45.0,
-                    "F[L,R]_calf_joint": -80.0,
-                    "R[L,R]_calf_joint": -79.0,
-                }.items()
+            k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
+            for k, v in {
+                "FL_hip_joint": 2.5,
+                "FR_hip_joint": -2.5,
+                "RL_hip_joint": 6.0,
+                "RR_hip_joint": -6.0,
+                "F[L,R]_thigh_joint": 30.0,
+                "R[L,R]_thigh_joint": 45.0,
+                "F[L,R]_calf_joint": -80.0,
+                "R[L,R]_calf_joint": -79.0,
+            }.items()
         },
         joint_vel={".*": 0.0},
     ),
-    soft_joint_pos_limit_factor=0.9,
+    soft_joint_pos_limit_factor=0.75,  # 0.9
     # actuators={
     #     "base_legs": DCMotorCfg(
     #         joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],

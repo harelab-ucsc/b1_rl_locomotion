@@ -69,6 +69,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         history_length=6,
         force_threshold=0.0,
         debug_vis=True,
+        track_air_time=True,
         filter_prim_paths_expr=["/World/ground"],
     )
 
@@ -118,15 +119,15 @@ class CommandCfg:
     velocity = mdp.UniformVelocityCommandCfg(
         asset_name="robot",
         heading_command=True,  # use heading instead of angular vel
-        rel_standing_envs=0.1,  # 10% of the time, stand still
-        rel_heading_envs=0.7,  # 70% of the time, use heading instead of angular z
+        rel_standing_envs=0.2,  # 20% of the time, stand still
+        rel_heading_envs=1.0,  # 100% of the time, use heading instead of angular z
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(-1, 1),
             lin_vel_y=(-1, 1),
             ang_vel_z=(-math.pi / 4, math.pi / 4),  # 25 deg/s max
             heading=(-math.pi, math.pi),
         ),
-        resampling_time_range=(5, 10),
+        resampling_time_range=(10, 10),
         debug_vis=True,
     )
 
@@ -140,6 +141,9 @@ class ObservationsCfg:
         """Observations for policy group."""
 
         # observation terms (order preserved)
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)  # add noise later: noise=Unoise(n_min=-0.1, n_max=0.1)
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)  # add noise later: noise=Unoise(n_min=-0.2, n_max=0.2)
+
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
 
@@ -161,6 +165,37 @@ class ObservationsCfg:
 @configclass
 class EventCfg:
     """Configuration for events."""
+    # TODO: startup events to randomize material, mass, and CoM
+    physics_material = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.8, 0.8),
+            "dynamic_friction_range": (0.6, 0.6),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 64,
+        },
+    )
+
+    add_base_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "mass_distribution_params": (-5.0, 5.0),
+            "operation": "add",
+        },
+    )
+
+    base_com = EventTerm(
+        func=mdp.randomize_rigid_body_com,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
+        },
+    )
 
     # reset
     reset_all_joints = EventTerm(
@@ -202,36 +237,47 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # Constant running reward
-    # alive = RewTerm(func=mdp.is_alive, weight=1.0)
+    # -- Rewards
 
-    # Failure penalty
-    terminating = RewTerm(func=mdp.is_terminated, weight=-1)
+    # Command Tracking
+    lin_vel_tracking = RewTerm(func=mdp.track_lin_vel_xy_exp, weight=1, params={"std": math.sqrt(0.25), "command_name": "velocity"})
+    angle_vel_tracking = RewTerm(func=mdp.track_ang_vel_z_exp, weight=0.5, params={"std": math.sqrt(0.25), "command_name": "velocity"})
+
+    # -- Penalties
+
+    # Minismize up-down movement
+    vel_z = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
+
+    # angular velocity xy (i.e. rotating sideways)
+    angle_vel_xy = RewTerm(func=mdp.ang_vel_xy_l2, weight=-1)  # -0.05
 
     # Action rate
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
 
-    # angular velocity xy (i.e. rotating sideways)
-    angle_vel_xy = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
-
-    # velocity z (i.e moving up down a lot)
-    vel_z = RewTerm(func=mdp.lin_vel_z_l2, weight=-0.5)
-
-    # Base Height, works without sensors for FLAT TERRAIN ONLY
-    # base_height = RewTerm(func=mdp.base_height_l2, weight=-0.05, params={"target_height": 0.5, "asset_cfg": SceneEntityCfg("robot")})
+    # thigh contact
+    thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 1.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
 
     # Flat Orientation
-    # flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-0.1)
+    flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
 
-    # Command Tracking
-    lin_vel_tracking = RewTerm(func=mdp.track_lin_vel_xy_exp, weight=1, params={"std": 1.0, "command_name": "velocity", "asset_cfg": SceneEntityCfg("robot")})
-    angle_vel_tracking = RewTerm(func=mdp.track_ang_vel_z_exp, weight=1, params={"std": 1.0, "command_name": "velocity", "asset_cfg": SceneEntityCfg("robot")})
+    # Soft Joint Limits (prevent cross legs)
+    dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-0.1)
 
     # torques
-    torques = RewTerm(func=mdp.joint_torques_l2, weight=-0.01)
+    torques = RewTerm(func=mdp.joint_torques_l2, weight=-2.5e-5)
 
-    # thigh contact
-    thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 0.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
+    dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
+
+    # Feet Air time (pos weight but negative reward due to )
+    # feet_air_time = RewTerm(func=mdp.feet_air_time, weight=0.01, params={"sensor_cfg": SceneEntityCfg("contact_forces_calf"), "command_name": "velocity", "threshold": 0.1})
+
+    # Failure penalty
+    terminating = RewTerm(func=mdp.is_terminated, weight=-45)
+
+    # Base Height, works without sensors for FLAT TERRAIN ONLY
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-1, params={"target_height": 0.65, "asset_cfg": SceneEntityCfg("robot")})
+
+
 
 
 @configclass
@@ -245,7 +291,7 @@ class TerminationsCfg:
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 0.0,
+            "threshold": 1.0,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
@@ -261,6 +307,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: B1RlLocomotionSceneCfg = B1RlLocomotionSceneCfg(
         num_envs=512, env_spacing=3.0
+        # num_envs=4096, env_spacing=2.5
     )
     # Basic settings
     commands: CommandCfg = CommandCfg()
@@ -275,8 +322,8 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
-        self.decimation = 2
-        self.episode_length_s = 10
+        self.decimation = 4  # 4 sim steps per control step
+        self.episode_length_s = 20.0    # 10s previously
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 2.0)
         # simulation settings
