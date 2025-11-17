@@ -118,7 +118,7 @@ class CommandCfg:
 
     # height command
     height = mdp.UniformPoseCommandAbsoluteCfg(
-        asset_name="robot",
+        asset_name="robot",  # type: ignore
         body_name="base",
         ranges=mdp.UniformPoseCommandAbsoluteCfg.Ranges(
             pos_x=(0.0, 0.0),

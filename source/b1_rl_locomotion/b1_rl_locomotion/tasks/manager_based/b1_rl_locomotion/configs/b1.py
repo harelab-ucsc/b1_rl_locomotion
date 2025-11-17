@@ -51,26 +51,23 @@ B1_CFG = ArticulationCfg(
         ),
         # visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.00, 0.01, 0.01))
     ),
-
-
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.76258),
         # Option 1: Standing Joint pos (values in radians)
-        joint_pos={
-            "FR_hip_joint": -0.018275,
-            "FR_thigh_joint": 0.734231,
-            "FR_calf_joint": -1.378738,
-            "FL_hip_joint": 0.033276,
-            "FL_thigh_joint": 0.711885,
-            "FL_calf_joint": -1.356828,
-            "RR_hip_joint": -0.016240,
-            "RR_thigh_joint": 0.755382,
-            "RR_calf_joint": -1.407461,
-            "RL_hip_joint": 0.031771,
-            "RL_thigh_joint": 0.742019,
-            "RL_calf_joint": -1.385845,
-        },
-
+        # joint_pos={
+        #     "FR_hip_joint": -0.018275,
+        #     "FR_thigh_joint": 0.734231,
+        #     "FR_calf_joint": -1.378738,
+        #     "FL_hip_joint": 0.033276,
+        #     "FL_thigh_joint": 0.711885,
+        #     "FL_calf_joint": -1.356828,
+        #     "RR_hip_joint": -0.016240,
+        #     "RR_thigh_joint": 0.755382,
+        #     "RR_calf_joint": -1.407461,
+        #     "RL_hip_joint": 0.031771,
+        #     "RL_thigh_joint": 0.742019,
+        #     "RL_calf_joint": -1.385845,
+        # },
         # Option 2: Lying down with thighs up (values in radians)
         # joint_pos={
         #     "FR_hip_joint": -0.578783,
@@ -86,7 +83,6 @@ B1_CFG = ArticulationCfg(
         #     "RL_thigh_joint": 1.467400,
         #     "RL_calf_joint": -2.626244,
         # },
-
         # Option 3: Lying down with thighs down (initial position) (values in radians)
         # joint_pos={
         #     "FR_hip_joint": -0.558384,
@@ -102,19 +98,19 @@ B1_CFG = ArticulationCfg(
         #     "RL_thigh_joint": 1.051190,
         #     "RL_calf_joint": -2.626244,
         # },
-        # joint_pos={
-        #     k: v*(np.pi / 180.0)  # convert to rad, the values below are in degrees
-        #         for k, v in {
-        #             "FL_hip_joint": 2.5,
-        #             "FR_hip_joint": -2.5,
-        #             "RL_hip_joint": 6.0,
-        #             "RR_hip_joint": -6.0,
-        #             "F[L,R]_thigh_joint": 30.0,
-        #             "R[L,R]_thigh_joint": 45.0,
-        #             "F[L,R]_calf_joint": -80.0,
-        #             "R[L,R]_calf_joint": -79.0,
-        #         }.items()
-        # },
+        joint_pos={
+            k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
+            for k, v in {
+                "FL_hip_joint": 2.5,
+                "FR_hip_joint": -2.5,
+                "RL_hip_joint": 6.0,
+                "RR_hip_joint": -6.0,
+                "F[L,R]_thigh_joint": 30.0,
+                "R[L,R]_thigh_joint": 45.0,
+                "F[L,R]_calf_joint": -80.0,
+                "R[L,R]_calf_joint": -79.0,
+            }.items()
+        },
         joint_vel={".*": 0.0},
     ),
     soft_joint_pos_limit_factor=0.9,
@@ -131,7 +127,7 @@ B1_CFG = ArticulationCfg(
     # },
     actuators={  # taken from URDF
         "all": ImplicitActuatorCfg(
-            joint_names_expr=[".*"], stiffness=None, damping=None
+            joint_names_expr=[".*"], stiffness=None, damping=None  # type: ignore
         )
         # "hips": ImplicitActuatorCfg(
         #     joint_names_expr=[".*_hip_joint"],
