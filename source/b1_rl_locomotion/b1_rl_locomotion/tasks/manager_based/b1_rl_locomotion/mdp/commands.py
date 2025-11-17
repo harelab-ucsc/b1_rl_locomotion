@@ -48,8 +48,13 @@ class UniformPoseCommandAbsolute(UniformPoseCommand):
             return
         # update the markers
         # -- goal pose
+
+        # combine body xy and world z
+        goal_pos_position = self.robot.data.body_link_pose_w[:, self.body_idx]
+        goal_pos_position[:, 2:] = self.pose_command_b[:, 2:]
+
         self.goal_pose_visualizer.visualize(
-            self.pose_command_b[:, :3], self.pose_command_b[:, 3:]
+            goal_pos_position[:, :3], goal_pos_position[:, 3:]
         )
         # -- current body pose
         body_link_pose_w = self.robot.data.body_link_pose_w[:, self.body_idx]

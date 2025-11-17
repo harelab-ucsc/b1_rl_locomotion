@@ -405,7 +405,7 @@ class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
 
         """Post initialization."""
         # general settings
-        self.scene.num_envs = 10
+        self.scene.num_envs = 5
         self.scene.env_spacing = 3.0
         # disable noise
         self.observations.policy.enable_corruption = False
