@@ -46,25 +46,16 @@ def base_height_from_command(
     # Desired position in base (body) frame — shape [num_envs, 3]
     des_pos_b = command[:, :3]
 
-    # Transform desired pose from body → world frame
-    des_pose_w, _ = combine_frame_transforms(
-        robot.data.root_state_w[:, :3],  # world position of body origin
-        robot.data.root_state_w[:, 3:7],  # world orientation
-        des_pos_b,  # desired pos (body frame)
-    )
-
     # Current CoM world position of the base (rigid body center of mass)
     curr_pos_w = robot.data.body_com_pose_w[:, asset_cfg.body_ids[0], :3]  # type: ignore
     # Compute per-env L2 height deviation (ignore xy)
     # pos_error = torch.norm(curr_pos_w - des_pose_w, dim=1)
-    height_err = torch.abs(curr_pos_w[:, 2] - des_pose_w[:, 2])
+    height_err = torch.abs(curr_pos_w[:, 2] - des_pos_b[:, 2])
 
     # Debug prints
     print("-------------------------------")
     print("Desired base position (body):")
     print(des_pos_b)
-    print("Desired base position (world):")
-    print(des_pose_w)
     print("Current base CoM position (world):")
     print(curr_pos_w)
     print("Height error:")
