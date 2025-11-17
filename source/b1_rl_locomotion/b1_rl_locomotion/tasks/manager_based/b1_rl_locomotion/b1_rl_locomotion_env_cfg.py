@@ -249,7 +249,7 @@ class RewardsCfg:
     vel_z = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
 
     # angular velocity xy (i.e. rotating sideways)
-    angle_vel_xy = RewTerm(func=mdp.ang_vel_xy_l2, weight=-1)  # -0.05
+    angle_vel_xy = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)  # -0.05
 
     # Action rate
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
@@ -258,7 +258,7 @@ class RewardsCfg:
     thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 1.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
 
     # Flat Orientation
-    flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
+    flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-2.5)
 
     # Soft Joint Limits (prevent cross legs)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-0.1)
@@ -275,7 +275,7 @@ class RewardsCfg:
     terminating = RewTerm(func=mdp.is_terminated, weight=-45)
 
     # Base Height, works without sensors for FLAT TERRAIN ONLY
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-1, params={"target_height": 0.65, "asset_cfg": SceneEntityCfg("robot")})
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-1.25, params={"target_height": 0.76})
 
 
 
