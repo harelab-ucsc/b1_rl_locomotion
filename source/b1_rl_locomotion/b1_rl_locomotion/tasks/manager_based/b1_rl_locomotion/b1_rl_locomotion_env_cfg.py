@@ -246,36 +246,36 @@ class RewardsCfg:
     # -- Penalties
 
     # Minismize up-down movement
-    vel_z = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
+    vel_z = RewTerm(func=mdp.lin_vel_z_l2, weight=-0.35)
 
     # angular velocity xy (i.e. rotating sideways)
     angle_vel_xy = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)  # -0.05
 
     # Action rate
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.025)
 
     # thigh contact
     thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 1.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
 
     # Flat Orientation
-    flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-2.5)
+    flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-8)
 
     # Soft Joint Limits (prevent cross legs)
-    dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-0.1)
+    dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-1.0)
 
     # torques
-    torques = RewTerm(func=mdp.joint_torques_l2, weight=-2.5e-5)
+    torques = RewTerm(func=mdp.joint_torques_l2, weight=-2.5e-6)
 
     dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
 
     # Feet Air time (pos weight but negative reward due to )
-    # feet_air_time = RewTerm(func=mdp.feet_air_time, weight=0.01, params={"sensor_cfg": SceneEntityCfg("contact_forces_calf"), "command_name": "velocity", "threshold": 0.1})
+    feet_air_time = RewTerm(func=mdp.feet_air_time, weight=8.0, params={"sensor_cfg": SceneEntityCfg("contact_forces_calf"), "command_name": "velocity", "threshold": 0.125})
 
     # Failure penalty
     terminating = RewTerm(func=mdp.is_terminated, weight=-45)
 
     # Base Height, works without sensors for FLAT TERRAIN ONLY
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-1.25, params={"target_height": 0.76})
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-5, params={"target_height": 0.575})
 
 
 
