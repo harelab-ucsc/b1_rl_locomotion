@@ -23,7 +23,7 @@ def base_height_from_command(
     command_name: str,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     use_tanh: bool = False,  # when True, applies tanh to height error (becomes a reward instead of a penalty)
-    tanh_scale: float = 0.1,  # d/dx f(x) = -1 at around x=18cm if scale=0.1, where f(x)=1-tanh(x/tanh_scale)
+    tanh_scale: float = 0.18,  # d/dx f(x) = -1 at around x=18.5cm if scale=0.18, where f(x)=(1-tanh(x/tanh_scale))^2
 ) -> torch.Tensor:
     """Penalize asset height deviation from command target.
 
@@ -48,9 +48,8 @@ def base_height_from_command(
 
     # Current CoM world position of the base (rigid body center of mass)
     curr_pos_w = robot.data.body_com_pose_w[:, asset_cfg.body_ids[0], :3]  # type: ignore
-    # Compute per-env L2 height deviation (ignore xy)
-    # pos_error = torch.norm(curr_pos_w - des_pose_w, dim=1)
-    height_err = torch.abs(curr_pos_w[:, 2] - des_pos_b[:, 2])
+    # Compute per-env height deviation (ignore xy)
+    height_err = torch.square(torch.abs(curr_pos_w[:, 2] - des_pos_b[:, 2]))
 
     # # Debug prints
     # print("-------------------------------")

@@ -45,7 +45,6 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     )
 
     # robot
-    # robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
     robot: ArticulationCfg = B1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
 
     contact_forces_body = ContactSensorCfg(
@@ -124,7 +123,7 @@ class CommandCfg:
         ranges=mdp.UniformPoseCommandAbsoluteCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.2, 0.81316),  # 20cm to max height
+            pos_z=(0.2, 0.7),  # 20cm to 70cm
             roll=(0.0, 0.0),
             pitch=(0, 0),
             yaw=(0, 0),
@@ -257,7 +256,7 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
             "command_name": "height",
             "use_tanh": True,
-            "tanh_scale": 0.1,  # d/dx f(x) = -1 at around x=18cm, where d/dx f(x) = -10 sech^2(x/0.1)
+            "tanh_scale": 0.18,  # d/dx f(x) = -1 at around x=18.5cm if scale=0.18
         },
         weight=0.5,
     )
@@ -295,6 +294,12 @@ class RewardsCfg:
     #   TODO: update b1.usd to include sensors for feet
     #       TODO: update contact_forces_feet to match sensors in b1.usd
     #
+
+    min_torque = RewTerm(
+        func=mdp.joint_torques_l2,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
+        weight=0,
+    )
 
     # Center the hips
     center_hips = RewTerm(
@@ -340,7 +345,7 @@ class CurriculumsCfg:
         params={
             "term_name": "center_hips",
             "w0": -0.5,
-            "w1": -0.05,
+            "w1": -0.0,
             "t0": 0,
             "t1": 5000,
         },
@@ -364,7 +369,7 @@ class CurriculumsCfg:
         params={
             "term_name": "feet_contacting_ground",
             "w0": -0.1,
-            "w1": -0.7,
+            "w1": -0.8,
             "t0": 3000,
             "t1": 14000,
         },
@@ -376,7 +381,7 @@ class CurriculumsCfg:
         params={
             "term_name": "joint_vel",
             "w0": -0.0005,
-            "w1": -0.08,
+            "w1": -0.1,
             "t0": 0,
             "t1": 15000,
         },
@@ -387,7 +392,18 @@ class CurriculumsCfg:
         params={
             "term_name": "action_rt",
             "w0": -0.0005,
-            "w1": -0.08,
+            "w1": -0.1,
+            "t0": 0,
+            "t1": 15000,
+        },
+    )
+    # incraese joint torque penalty over time
+    min_torque = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "min_torque",
+            "w0": 0.0,
+            "w1": -2.5e-4,
             "t0": 0,
             "t1": 15000,
         },
