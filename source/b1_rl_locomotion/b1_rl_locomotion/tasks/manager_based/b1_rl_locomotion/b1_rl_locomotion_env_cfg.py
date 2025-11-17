@@ -308,6 +308,19 @@ class RewardsCfg:
         params={"sensor_cfg": SceneEntityCfg("contact_forces_feet")},
         weight=-0.15,
     )
+
+    # penalize joint and action rate
+    joint_vel = RewTerm(
+        func=mdp.joint_vel_l2,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+        weight=-0.0005,
+    )
+
+    action_rt = RewTerm(
+        func=mdp.action_rate_l2,
+        weight=-0.0005,
+    )
+
     ############################################################
 
     # # (1) Constant running reward
@@ -327,7 +340,7 @@ class CurriculumsCfg:
         params={
             "term_name": "center_hips",
             "w0": -0.5,
-            "w1": -0.1,
+            "w1": -0.05,
             "t0": 0,
             "t1": 5000,
         },
@@ -342,6 +355,41 @@ class CurriculumsCfg:
             "w1": -0.05,
             "t0": 3000,
             "t1": 8000,
+        },
+    )
+
+    # increase feet contacting ground penalty over time
+    feet_contacting_ground = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "feet_contacting_ground",
+            "w0": -0.1,
+            "w1": -0.7,
+            "t0": 3000,
+            "t1": 14000,
+        },
+    )
+
+    # increase joint position rate penalty over time
+    joint_vel = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "joint_vel",
+            "w0": -0.0005,
+            "w1": -0.08,
+            "t0": 0,
+            "t1": 15000,
+        },
+    )
+    # increase joint action rate penalty over time
+    action_rt = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "action_rt",
+            "w0": -0.0005,
+            "w1": -0.08,
+            "t0": 0,
+            "t1": 15000,
         },
     )
 
