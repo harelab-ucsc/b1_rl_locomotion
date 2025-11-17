@@ -52,14 +52,14 @@ def base_height_from_command(
     # pos_error = torch.norm(curr_pos_w - des_pose_w, dim=1)
     height_err = torch.abs(curr_pos_w[:, 2] - des_pos_b[:, 2])
 
-    # Debug prints
-    print("-------------------------------")
-    print("Desired base position (body):")
-    print(des_pos_b)
-    print("Current base CoM position (world):")
-    print(curr_pos_w)
-    print("Height error:")
-    print(height_err)
+    # # Debug prints
+    # print("-------------------------------")
+    # print("Desired base position (body):")
+    # print(des_pos_b)
+    # print("Current base CoM position (world):")
+    # print(curr_pos_w)
+    # print("Height error:")
+    # print(height_err)
 
     if use_tanh:
         # Apply tanh to convert to a reward (higher is better)

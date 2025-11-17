@@ -248,7 +248,7 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
             "command_name": "height",
         },
-        weight=1,
+        weight=-0.3,
     )
 
     base_com_height_fine = RewTerm(
@@ -372,7 +372,7 @@ class TerminationsCfg:
 class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: B1RlLocomotionSceneCfg = B1RlLocomotionSceneCfg(
-        num_envs=512, env_spacing=3.0
+        num_envs=1024, env_spacing=3.0
     )
     # Basic settings
     commands: CommandCfg = CommandCfg()
