@@ -89,7 +89,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointPositionActionCfg(
+    joint_effort = mdp.MirroredJointPositionActionCfg(
         asset_name="robot",
         joint_names=[  # FL -> FR -> RL -> RR  and  hip -> thigh -> calf
             "FL_hip_joint",
@@ -123,12 +123,12 @@ class CommandCfg:
         ranges=mdp.UniformPoseCommandAbsoluteCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.2, 0.7),  # 20cm to 70cm
+            pos_z=(0.54, 0.54),  # ideal height is 0.54
             roll=(0.0, 0.0),
             pitch=(0, 0),
             yaw=(0, 0),
         ),
-        resampling_time_range=(5.0, 5.0),
+        resampling_time_range=(10.0, 10.0),
         debug_vis=True,
     )
 
@@ -206,7 +206,7 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
-            "position_range": (-0.2, 0.2),
+            "position_range": (-0.015, 0.015),
             "velocity_range": (-0.0, 0.0),
         },
     )
@@ -239,6 +239,9 @@ class EventCfg:
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
+
+    # Joint position error
+
 
     # Track base height (CoM)
     base_com_height = RewTerm(
@@ -295,11 +298,11 @@ class RewardsCfg:
     #       TODO: update contact_forces_feet to match sensors in b1.usd
     #
 
-    min_torque = RewTerm(
-        func=mdp.joint_torques_l2,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
-        weight=0,
-    )
+    # min_torque = RewTerm(
+    #     func=mdp.joint_torques_l2,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
+    #     weight=0,
+    # )
 
     # Center the hips
     center_hips = RewTerm(
@@ -397,17 +400,17 @@ class CurriculumsCfg:
             "t1": 15000,
         },
     )
-    # incraese joint torque penalty over time
-    min_torque = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "min_torque",
-            "w0": 0.0,
-            "w1": -2.5e-4,
-            "t0": 0,
-            "t1": 15000,
-        },
-    )
+    # # incraese joint torque penalty over time
+    # min_torque = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "min_torque",
+    #         "w0": 0.0,
+    #         "w1": -2.5e-4,
+    #         "t0": 0,
+    #         "t1": 15000,
+    #     },
+    # )
 
 
 @configclass
@@ -421,7 +424,7 @@ class TerminationsCfg:
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 0.0,
+            "threshold": 5,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )

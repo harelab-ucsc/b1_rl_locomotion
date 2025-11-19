@@ -52,7 +52,7 @@ B1_CFG = ArticulationCfg(
         # visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.00, 0.01, 0.01))
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.76258),
+        pos=(0.0, 0.0, 0.16258),
         # Option 1: Standing Joint pos (values in radians)
         # joint_pos={
         #     "FR_hip_joint": -0.018275,
@@ -84,36 +84,36 @@ B1_CFG = ArticulationCfg(
         #     "RL_calf_joint": -2.626244,
         # },
         # Option 3: Lying down with thighs down (initial position) (values in radians)
-        # joint_pos={
-        #     "FR_hip_joint": -0.558384,
-        #     "FR_thigh_joint": 1.078270,
-        #     "FR_calf_joint": -2.751709,
-        #     "FL_hip_joint": 0.534135,
-        #     "FL_thigh_joint": 1.089023,
-        #     "FL_calf_joint": -2.739185,
-        #     "RR_hip_joint": -0.584137,
-        #     "RR_thigh_joint": 1.067164,
-        #     "RR_calf_joint": -2.622180,
-        #     "RL_hip_joint": 0.544445,
-        #     "RL_thigh_joint": 1.051190,
-        #     "RL_calf_joint": -2.626244,
-        # },
         joint_pos={
-            k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
-            for k, v in {
-                "FL_hip_joint": 2.5,
-                "FR_hip_joint": -2.5,
-                "RL_hip_joint": 6.0,
-                "RR_hip_joint": -6.0,
-                "F[L,R]_thigh_joint": 30.0,
-                "R[L,R]_thigh_joint": 45.0,
-                "F[L,R]_calf_joint": -80.0,
-                "R[L,R]_calf_joint": -79.0,
-            }.items()
+            "FR_hip_joint": -0.558384,
+            "FR_thigh_joint": 1.078270,
+            "FR_calf_joint": -2.751709,
+            "FL_hip_joint": 0.534135,
+            "FL_thigh_joint": 1.089023,
+            "FL_calf_joint": -2.739185,
+            "RR_hip_joint": -0.584137,
+            "RR_thigh_joint": 1.067164,
+            "RR_calf_joint": -2.622180,
+            "RL_hip_joint": 0.544445,
+            "RL_thigh_joint": 1.051190,
+            "RL_calf_joint": -2.626244,
         },
+        # joint_pos={
+        #     k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
+        #     for k, v in {
+        #         "FL_hip_joint": 2.5,
+        #         "FR_hip_joint": -2.5,
+        #         "RL_hip_joint": 6.0,
+        #         "RR_hip_joint": -6.0,
+        #         "F[L,R]_thigh_joint": 30.0,
+        #         "R[L,R]_thigh_joint": 45.0,
+        #         "F[L,R]_calf_joint": -80.0,
+        #         "R[L,R]_calf_joint": -79.0,
+        #     }.items()
+        # },
         joint_vel={".*": 0.0},
     ),
-    soft_joint_pos_limit_factor=0.9,
+    soft_joint_pos_limit_factor=1,
     # actuators={
     #     "base_legs": DCMotorCfg(
     #         joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],

@@ -70,7 +70,7 @@ agent:
     experiment_name: "run_3"
     write_interval: auto
     checkpoint_interval: auto
-    wandb: False
+    wandb: True
 
 
 # Sequential trainer
