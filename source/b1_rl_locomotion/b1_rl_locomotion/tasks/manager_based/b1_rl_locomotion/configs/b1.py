@@ -52,7 +52,7 @@ B1_CFG = ArticulationCfg(
         # visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.00, 0.01, 0.01))
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.16258),
+        pos=(0.0, 0.0, 0.12258),
         # Option 1: Standing Joint pos (values in radians)
         # joint_pos={
         #     "FR_hip_joint": -0.018275,

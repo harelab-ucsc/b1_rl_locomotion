@@ -128,7 +128,7 @@ class CommandCfg:
             pitch=(0, 0),
             yaw=(0, 0),
         ),
-        resampling_time_range=(10.0, 10.0),
+        resampling_time_range=(5.0, 5.0),
         debug_vis=True,
     )
 
@@ -314,7 +314,7 @@ class RewardsCfg:
     feet_contacting_ground = RewTerm(
         func=mdp.desired_contacts,
         params={"sensor_cfg": SceneEntityCfg("contact_forces_feet")},
-        weight=-0.15,
+        weight=-0.3,
     )
 
     # penalize joint and action rate
@@ -424,7 +424,7 @@ class TerminationsCfg:
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 5,
+            "threshold": 40,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
