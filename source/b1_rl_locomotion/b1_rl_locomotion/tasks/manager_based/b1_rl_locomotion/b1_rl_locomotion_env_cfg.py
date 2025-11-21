@@ -17,7 +17,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, ImuCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg
 
 from . import mdp
@@ -73,6 +73,11 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=["/World/ground"],
     )
 
+    imu_sensor = ImuCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/imu",
+        update_period=0.0,
+        debug_vis=True,
+    )
     # lights
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
@@ -166,15 +171,16 @@ class ObservationsCfg:
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
 
         # relevant IMU data
-        # imu_ang_vel = ObsTerm(
-        #     func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("robot")}
-        # )
-        # imu_lin_acc = ObsTerm(
-        #     func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("robot")}
-        # )
-        base_height = ObsTerm(
-            func=mdp.base_pos_z, params={"asset_cfg": SceneEntityCfg("robot")}
+        imu_ang_vel = ObsTerm(
+            func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
         )
+        imu_lin_acc = ObsTerm(
+            func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+        )
+
+        # base_height = ObsTerm(
+        #     func=mdp.base_pos_z, params={"asset_cfg": SceneEntityCfg("robot")}
+        # )
 
         # command
         # velocity_cmd = ObsTerm(
