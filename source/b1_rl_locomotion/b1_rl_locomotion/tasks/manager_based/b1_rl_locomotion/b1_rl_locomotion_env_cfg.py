@@ -171,16 +171,19 @@ class ObservationsCfg:
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
 
         # relevant IMU data
-        imu_ang_vel = ObsTerm(
-            func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+        # imu_ang_vel = ObsTerm(
+        #     func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("robot")}
+        # )
+        # imu_lin_acc = ObsTerm(
+        #     func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("robot")}
+        # )
+        
+        base_height = ObsTerm(
+            func=mdp.base_pos_z, params={"asset_cfg": SceneEntityCfg("robot")}
         )
         imu_lin_acc = ObsTerm(
             func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
         )
-
-        # base_height = ObsTerm(
-        #     func=mdp.base_pos_z, params={"asset_cfg": SceneEntityCfg("robot")}
-        # )
 
         # command
         # velocity_cmd = ObsTerm(
@@ -296,11 +299,11 @@ class RewardsCfg:
     #     weight=-1,
     # )
 
-    min_torque = RewTerm(
-        func=mdp.joint_torques_l2,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
-        weight=0,
-    )
+    # min_torque = RewTerm(
+    #     func=mdp.joint_torques_l2,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
+    #     weight=0,
+    # )
 
     # Center the hips
     center_hips = RewTerm(
@@ -348,7 +351,7 @@ class CurriculumsCfg:
             "w0": -0.5,
             "w1": -0.0,
             "t0": 0,
-            "t1": 5000,
+            "t1": 100000,
         },
     )
 
@@ -359,8 +362,8 @@ class CurriculumsCfg:
             "term_name": "base_lin_vel_xy",
             "w0": -0.005,
             "w1": -0.05,
-            "t0": 3000,
-            "t1": 8000,
+            "t0": 60000,
+            "t1": 160000,
         },
     )
 
@@ -371,8 +374,8 @@ class CurriculumsCfg:
             "term_name": "feet_contacting_ground",
             "w0": -0.1,
             "w1": -0.8,
-            "t0": 3000,
-            "t1": 14000,
+            "t0": 60000,
+            "t1": 280000,
         },
     )
 
@@ -384,7 +387,7 @@ class CurriculumsCfg:
             "w0": -0.0005,
             "w1": -0.1,
             "t0": 0,
-            "t1": 15000,
+            "t1": 300000,
         },
     )
     # increase joint action rate penalty over time
@@ -395,7 +398,7 @@ class CurriculumsCfg:
             "w0": -0.0005,
             "w1": -0.1,
             "t0": 0,
-            "t1": 15000,
+            "t1": 300000,
         },
     )
     # incraese joint torque penalty over time
@@ -406,7 +409,7 @@ class CurriculumsCfg:
             "w0": 0.0,
             "w1": -2.5e-5,
             "t0": 0,
-            "t1": 15000,
+            "t1": 300000,
         },
     )
 
