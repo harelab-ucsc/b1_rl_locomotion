@@ -19,6 +19,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg
+from isaaclab.sensors import CameraCfg
 
 from . import mdp
 
