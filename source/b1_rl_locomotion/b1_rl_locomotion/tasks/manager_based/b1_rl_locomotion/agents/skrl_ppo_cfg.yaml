@@ -41,7 +41,7 @@ memory:
 agent:
   class: PPO
   rollouts: 32
-  learning_epochs: 8
+  learning_epochs: 15
   mini_batches: 8
   discount_factor: 0.95
   lambda: 0.95
@@ -67,10 +67,10 @@ agent:
   # logging and checkpoint
   experiment:
     directory: "stand_sit"
-    experiment_name: "run_3"
+    experiment_name: "run_12"
     write_interval: auto
     checkpoint_interval: auto
-    wandb: False
+    wandb: True
 
 
 # Sequential trainer

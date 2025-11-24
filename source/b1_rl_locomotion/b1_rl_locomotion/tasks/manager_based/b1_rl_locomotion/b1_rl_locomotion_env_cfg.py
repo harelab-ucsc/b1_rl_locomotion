@@ -17,7 +17,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, ImuCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg
 from isaaclab.sensors import CameraCfg
 
@@ -74,6 +74,12 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=["/World/ground"],
     )
 
+    # imu_sensor = ImuCfg(
+    #     prim_path="{ENV_REGEX_NS}/Robot/b1_description/imu",
+    #     update_period=0.0,
+    #     debug_vis=True,
+    # )
+    
     # lights
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
@@ -90,7 +96,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointPositionActionCfg(
+    joint_effort = mdp.MirroredJointPositionActionCfg(
         asset_name="robot",
         joint_names=[  # FL -> FR -> RL -> RR  and  hip -> thigh -> calf
             "FL_hip_joint",
@@ -124,7 +130,7 @@ class CommandCfg:
         ranges=mdp.UniformPoseCommandAbsoluteCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.2, 0.7),  # 20cm to 70cm
+            pos_z=(0.54, 0.54),  # ideal height is 0.54
             roll=(0.0, 0.0),
             pitch=(0, 0),
             yaw=(0, 0),
@@ -173,9 +179,13 @@ class ObservationsCfg:
         # imu_lin_acc = ObsTerm(
         #     func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("robot")}
         # )
+        
         base_height = ObsTerm(
             func=mdp.base_pos_z, params={"asset_cfg": SceneEntityCfg("robot")}
         )
+        # imu_lin_acc = ObsTerm(
+        #     func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+        # )
 
         # command
         # velocity_cmd = ObsTerm(
@@ -207,7 +217,7 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
-            "position_range": (-0.2, 0.2),
+            "position_range": (-0.015, 0.015),
             "velocity_range": (-0.0, 0.0),
         },
     )
@@ -240,6 +250,9 @@ class EventCfg:
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
+
+    # Positional locality for feet, limit "skidding"
+
 
     # Track base height (CoM)
     base_com_height = RewTerm(
@@ -288,19 +301,11 @@ class RewardsCfg:
     #     weight=-1,
     # )
 
-    ############################################################
-    #   TODO: Reward for feet contacting the ground
-    #
-    #   TODO: verify correct definition of feet_contacting_ground
-    #   TODO: update b1.usd to include sensors for feet
-    #       TODO: update contact_forces_feet to match sensors in b1.usd
-    #
-
-    min_torque = RewTerm(
-        func=mdp.joint_torques_l2,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
-        weight=0,
-    )
+    # min_torque = RewTerm(
+    #     func=mdp.joint_torques_l2,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
+    #     weight=0,
+    # )
 
     # Center the hips
     center_hips = RewTerm(
@@ -312,7 +317,7 @@ class RewardsCfg:
     feet_contacting_ground = RewTerm(
         func=mdp.desired_contacts,
         params={"sensor_cfg": SceneEntityCfg("contact_forces_feet")},
-        weight=-0.15,
+        weight=-0.5,
     )
 
     # penalize joint and action rate
@@ -404,9 +409,9 @@ class CurriculumsCfg:
         params={
             "term_name": "min_torque",
             "w0": 0.0,
-            "w1": -2.5e-4,
+            "w1": -2.5e-5,
             "t0": 0,
-            "t1": 15000,
+            "t1": 300000,
         },
     )
 
@@ -418,14 +423,14 @@ class TerminationsCfg:
     # (1) Time out
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
-    # (2) Base touches the ground
-    falls_over = DoneTerm(
-        func=mdp.illegal_contact,
-        params={
-            "threshold": 0.0,
-            "sensor_cfg": SceneEntityCfg("contact_forces_body"),
-        },
-    )
+    # # (2) Base touches the ground
+    # falls_over = DoneTerm(
+    #     func=mdp.illegal_contact,
+    #     params={
+    #         "threshold": 400,
+    #         "sensor_cfg": SceneEntityCfg("contact_forces_body"),
+    #     },
+    # )
 
 
 ##

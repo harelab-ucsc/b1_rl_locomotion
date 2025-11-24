@@ -52,7 +52,7 @@ B1_CFG = ArticulationCfg(
         # visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.00, 0.01, 0.01))
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.76258),
+        pos=(0.0, 0.0, 0.12258),
         # Option 1: Standing Joint pos (values in radians)
         joint_pos={
             k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
@@ -109,7 +109,7 @@ B1_CFG = ArticulationCfg(
         # },
         joint_vel={".*": 0.0},
     ),
-    soft_joint_pos_limit_factor=0.9,
+    soft_joint_pos_limit_factor=1,
     # actuators={
     #     "base_legs": DCMotorCfg(
     #         joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
