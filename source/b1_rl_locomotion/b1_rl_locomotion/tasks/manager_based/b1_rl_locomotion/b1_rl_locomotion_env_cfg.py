@@ -78,7 +78,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     #     update_period=0.0,
     #     debug_vis=True,
     # )
-    
+
     # lights
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
@@ -300,11 +300,11 @@ class RewardsCfg:
     #     weight=-1,
     # )
 
-    # min_torque = RewTerm(
-    #     func=mdp.joint_torques_l2,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
-    #     weight=0,
-    # )
+    min_torque = RewTerm(
+        func=mdp.joint_torques_l2,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
+        weight=0,
+    )
 
     # Center the hips
     center_hips = RewTerm(
@@ -410,7 +410,7 @@ class CurriculumsCfg:
             "w0": 0.0,
             "w1": -2.5e-5,
             "t0": 0,
-            "t1": 300000,
+            "t1": 15000,
         },
     )
 
@@ -422,14 +422,14 @@ class TerminationsCfg:
     # (1) Time out
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
-    # # (2) Base touches the ground
-    # falls_over = DoneTerm(
-    #     func=mdp.illegal_contact,
-    #     params={
-    #         "threshold": 400,
-    #         "sensor_cfg": SceneEntityCfg("contact_forces_body"),
-    #     },
-    # )
+    # (2) Base touches the ground
+    falls_over = DoneTerm(
+        func=mdp.illegal_contact,
+        params={
+            "threshold": 40,
+            "sensor_cfg": SceneEntityCfg("contact_forces_body"),
+        },
+    )
 
 
 ##
