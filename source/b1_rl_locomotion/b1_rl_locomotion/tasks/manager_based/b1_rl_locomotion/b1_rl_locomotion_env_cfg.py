@@ -73,11 +73,12 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=["/World/ground"],
     )
 
-    imu_sensor = ImuCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/imu",
-        update_period=0.0,
-        debug_vis=True,
-    )
+    # imu_sensor = ImuCfg(
+    #     prim_path="{ENV_REGEX_NS}/Robot/b1_description/imu",
+    #     update_period=0.0,
+    #     debug_vis=True,
+    # )
+    
     # lights
     dome_light = AssetBaseCfg(
         prim_path="/World/DomeLight",
@@ -181,9 +182,9 @@ class ObservationsCfg:
         base_height = ObsTerm(
             func=mdp.base_pos_z, params={"asset_cfg": SceneEntityCfg("robot")}
         )
-        imu_lin_acc = ObsTerm(
-            func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
-        )
+        # imu_lin_acc = ObsTerm(
+        #     func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+        # )
 
         # command
         # velocity_cmd = ObsTerm(
@@ -351,7 +352,7 @@ class CurriculumsCfg:
             "w0": -0.5,
             "w1": -0.0,
             "t0": 0,
-            "t1": 100000,
+            "t1": 5000,
         },
     )
 
@@ -362,8 +363,8 @@ class CurriculumsCfg:
             "term_name": "base_lin_vel_xy",
             "w0": -0.005,
             "w1": -0.05,
-            "t0": 60000,
-            "t1": 160000,
+            "t0": 3000,
+            "t1": 8000,
         },
     )
 
@@ -374,8 +375,8 @@ class CurriculumsCfg:
             "term_name": "feet_contacting_ground",
             "w0": -0.1,
             "w1": -0.8,
-            "t0": 60000,
-            "t1": 280000,
+            "t0": 3000,
+            "t1": 14000,
         },
     )
 
@@ -387,7 +388,7 @@ class CurriculumsCfg:
             "w0": -0.0005,
             "w1": -0.1,
             "t0": 0,
-            "t1": 300000,
+            "t1": 15000,
         },
     )
     # increase joint action rate penalty over time
@@ -398,7 +399,7 @@ class CurriculumsCfg:
             "w0": -0.0005,
             "w1": -0.1,
             "t0": 0,
-            "t1": 300000,
+            "t1": 15000,
         },
     )
     # incraese joint torque penalty over time
