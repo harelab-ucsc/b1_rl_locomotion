@@ -19,6 +19,55 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+def base_height_from_command(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    use_tanh: bool = False,  # when True, applies tanh to height error (becomes a reward instead of a penalty)
+    tanh_scale: float = 0.18,  # d/dx f(x) = -1 at around x=18.5cm if scale=0.18, where f(x)=(1-tanh(x/tanh_scale))^2
+) -> torch.Tensor:
+    """Penalize asset height deviation from command target.
+
+    This function retrieves the target height from a pose command and computes
+    the diff between the asset's current center of mass (CoM) height and the desired height.
+
+    Args:
+        env: The environment instance.
+        command_name: Name of the command to retrieve the target height from.
+        asset_cfg: Configuration for the asset to track.
+        sensor_cfg: Optional sensor configuration for terrain adjustment.
+
+    Returns:
+        The per-environment height deviation as a tensor of shape [num_envs].
+    """
+    # Get pose command: [x, y, z, qx, qy, qz, qw]
+    command = env.command_manager.get_command(command_name)
+    robot: RigidObject = env.scene[asset_cfg.name]
+
+    # Desired position in base (body) frame — shape [num_envs, 3]
+    des_pos_b = command[:, :3]
+
+    # Current CoM world position of the base (rigid body center of mass)
+    curr_pos_w = robot.data.body_com_pose_w[:, asset_cfg.body_ids[0], :3]  # type: ignore
+    # Compute per-env height deviation (ignore xy)
+    height_err = torch.square(torch.abs(curr_pos_w[:, 2] - des_pos_b[:, 2]))
+
+    # # Debug prints
+    # print("-------------------------------")
+    # print("Desired base position (body):")
+    # print(des_pos_b)
+    # print("Current base CoM position (world):")
+    # print(curr_pos_w)
+    # print("Height error:")
+    # print(height_err)
+
+    if use_tanh:
+        # Apply tanh to convert to a reward (higher is better)
+        height_err = 1 - torch.tanh(height_err / tanh_scale)
+
+    return height_err
+
+
 def joint_pos_target_error_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg,

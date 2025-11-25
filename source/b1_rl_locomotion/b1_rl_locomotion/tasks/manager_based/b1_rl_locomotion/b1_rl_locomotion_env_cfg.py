@@ -123,6 +123,27 @@ class ActionsCfg:
 
 
 @configclass
+class CommandCfg:
+    """Command specification"""
+
+    # height command
+    height = mdp.UniformPoseCommandAbsoluteCfg(
+        asset_name="robot",  # type: ignore
+        body_name="base",
+        ranges=mdp.UniformPoseCommandAbsoluteCfg.Ranges(
+            pos_x=(0.0, 0.0),
+            pos_y=(0.0, 0.0),
+            pos_z=(0.0, 0.0),  # as low as possible
+            roll=(0.0, 0.0),
+            pitch=(0, 0),
+            yaw=(0, 0),
+        ),
+        resampling_time_range=(5.0, 5.0),
+        debug_vis=True,
+    )
+
+
+@configclass
 class ObservationsCfg:
     """Observation specifications for the MDP."""
 
@@ -243,6 +264,26 @@ class RewardsCfg:
         weight=0.01,
     )
 
+    # base height tracking
+    base_height = RewTerm(
+        func=mdp.base_height_from_command,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+            "command_name": "height",
+        },
+        weight=-0.01,
+    )
+    # base height fine tracking
+    base_height_fine = RewTerm(
+        func=mdp.base_height_from_command,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+            "command_name": "height",
+            "use_tanh": True,
+        },
+        weight=0.01,
+    )
+
     # minimize base linear velocity in all directions
     base_lin_vel_xy = RewTerm(
         func=mdp.body_lin_vel_l2,
@@ -335,13 +376,17 @@ class RewardsCfg:
 class CurriculumsCfg:
     """Curriculum settings for the MDP."""
 
+    ###########################################################
+    # STEP 1: Make the robot learn to balance and have feet contact the ground
+    ###########################################################
+
     # # increase lin vel penalty over time
     base_lin_vel_xy = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "base_lin_vel_xy",
-            "w0": -0.1,
-            "w1": -0.3,
+            "w0": -0.3,
+            "w1": -0.4,
             "t0": 0,
             "t1": 8000,
         },
@@ -352,7 +397,7 @@ class CurriculumsCfg:
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "feet_contacting_ground",
-            "w0": -0.2,
+            "w0": -0.3,
             "w1": -0.5,
             "t0": 1500,
             "t1": 15000,
@@ -364,7 +409,7 @@ class CurriculumsCfg:
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "feet_air_time",
-            "w0": -0.2,
+            "w0": -0.3,
             "w1": -0.5,
             "t0": 1500,
             "t1": 15000,
@@ -376,8 +421,8 @@ class CurriculumsCfg:
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "body_threshold_contact",
-            "w0": 0.05,
-            "w1": 0.8,
+            "w0": 0,
+            "w1": 0.5,
             "t0": 20000,
             "t1": 25000,
         },
@@ -414,7 +459,7 @@ class CurriculumsCfg:
             "term_name": "joint_vel",
             "w0": -5e-4,
             "w1": -0.1,
-            "t0": 5000,
+            "t0": 0,
             "t1": 10000,
         },
     )
@@ -425,8 +470,61 @@ class CurriculumsCfg:
             "term_name": "action_rt",
             "w0": -5e-4,
             "w1": -0.1,
-            "t0": 5000,
+            "t0": 0,
             "t1": 10000,
+        },
+    )
+    action_rt = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "action_rt",
+            "w0": -0.1,
+            "w1": -0.3,
+            "t0": 10001,
+            "t1": 30000,
+        },
+    )
+
+    # PART 2: Make the robot learn to lay down and reach target height + desired pose
+    ###########################################################
+    joint_error = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "joint_error",
+            "w0": -0.01,
+            "w1": -0.2,
+            "t0": 15000,
+            "t1": 20000,
+        },
+    )
+    joint_error_fine = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "joint_error_fine",
+            "w0": 0.01,
+            "w1": 0.5,
+            "t0": 15000,
+            "t1": 20000,
+        },
+    )
+    base_height = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "base_height",
+            "w0": -0.01,
+            "w1": -0.4,
+            "t0": 15000,
+            "t1": 20000,
+        },
+    )
+    base_height_fine = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "base_height_fine",
+            "w0": 0.01,
+            "w1": 0.5,
+            "t0": 15000,
+            "t1": 20000,
         },
     )
 
@@ -469,6 +567,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
+    commands: CommandCfg = CommandCfg()
     events: EventCfg = EventCfg()
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
