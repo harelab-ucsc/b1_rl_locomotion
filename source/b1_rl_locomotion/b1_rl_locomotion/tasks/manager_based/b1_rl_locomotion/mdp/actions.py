@@ -43,7 +43,7 @@ class MirroredJointPositionAction(JointPositionAction):
 
         # Apply pair-based mirroring
         for src_idx, tgt_idx in self.pairs_idx:
-            sign = -1.0 if "hip" in self._joint_names[tgt_idx] else 1.0
+            sign = -1.0 if "hip" in self._joint_names[src_idx] else 1.0
             mirrored[:, tgt_idx] = sign * self.processed_actions[:, src_idx]
 
 

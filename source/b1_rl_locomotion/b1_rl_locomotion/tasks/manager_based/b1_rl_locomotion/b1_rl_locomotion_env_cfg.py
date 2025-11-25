@@ -300,11 +300,11 @@ class RewardsCfg:
     #     weight=-1,
     # )
 
-    min_torque = RewTerm(
-        func=mdp.joint_torques_l2,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
-        weight=0,
-    )
+    # min_torque = RewTerm(
+    #     func=mdp.joint_torques_l2,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
+    #     weight=0,
+    # )
 
     # Center the hips
     center_hips = RewTerm(

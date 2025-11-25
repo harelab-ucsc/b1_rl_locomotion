@@ -88,15 +88,15 @@ B1_CFG = ArticulationCfg(
             "FR_hip_joint": -0.558384,
             "FR_thigh_joint": 1.07827,
             "FR_calf_joint": -2.751709,
-            "FL_hip_joint": 0.558384,
-            "FL_thigh_joint": 0.994838,
-            "FL_calf_joint": -2.751709,
-            "RR_hip_joint": -0.544445,
-            "RR_thigh_joint": 1.051190,
-            "RR_calf_joint": -2.622180,
-            "RL_hip_joint": -0.584137,
-            "RL_thigh_joint": 1.067164,
-            "RL_calf_joint": -2.622180,
+            "FL_hip_joint": 0.534135,
+            "FL_thigh_joint": 1.089023,
+            "FL_calf_joint": -2.739185,
+            "RR_hip_joint": -0.584137,
+            "RR_thigh_joint": 1.067164,
+            "RR_calf_joint": -2.62218,
+            "RL_hip_joint": 0.544445,
+            "RL_thigh_joint": 1.05119,
+            "RL_calf_joint": -2.626244,
         },
         # joint_pos={
         #     k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
@@ -113,7 +113,7 @@ B1_CFG = ArticulationCfg(
         # },
         joint_vel={".*": 0.0},
     ),
-    soft_joint_pos_limit_factor=0.9,
+    soft_joint_pos_limit_factor=1,
     # actuators={
     #     "base_legs": DCMotorCfg(
     #         joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],

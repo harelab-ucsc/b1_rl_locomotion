@@ -25,6 +25,10 @@ keywords = ["extension", "template", "isaaclab"]
 [[python.module]]
 name = "b1_rl_locomotion"
 
+# [[python.module]]
+# name = "b1_rl_locomotion.interactive"
+
+
 [isaaclab_settings]
 # TODO: Uncomment and list any apt dependencies here.
 #       If none, leave it commented out.
