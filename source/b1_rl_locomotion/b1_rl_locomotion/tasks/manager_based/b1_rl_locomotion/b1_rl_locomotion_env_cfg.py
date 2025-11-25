@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import math
+import numpy as np
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -20,6 +21,7 @@ from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg, ImuCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg
 from isaaclab.sensors import CameraCfg
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg
 
 from . import mdp
 
@@ -67,15 +69,15 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
 
     contact_forces_feet = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_foot",
+        track_air_time=True,  # required for air time penalty
         update_period=0.0,
         history_length=6,
         force_threshold=0.0,
         debug_vis=True,
-        filter_prim_paths_expr=["/World/ground"],
     )
 
     imu_sensor = ImuCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/imu",
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/base",
         history_length=6,
         update_period=0.0,
         debug_vis=True,
@@ -97,7 +99,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.MirroredJointPositionActionCfg(
+    joint_effort = mdp.JointPositionActionCfg(
         asset_name="robot",
         joint_names=[  # FL -> FR -> RL -> RR  and  hip -> thigh -> calf
             "FL_hip_joint",
@@ -121,47 +123,6 @@ class ActionsCfg:
 
 
 @configclass
-class CommandCfg:
-    """Command specification"""
-
-    # height command
-    height = mdp.UniformPoseCommandAbsoluteCfg(
-        asset_name="robot",  # type: ignore
-        body_name="base",
-        ranges=mdp.UniformPoseCommandAbsoluteCfg.Ranges(
-            pos_x=(0.0, 0.0),
-            pos_y=(0.0, 0.0),
-            pos_z=(0.0, 0.0),  # go to 11cm off the ground I guess
-            roll=(0.0, 0.0),
-            pitch=(0, 0),
-            yaw=(0, 0),
-        ),
-        resampling_time_range=(5.0, 5.0),
-        debug_vis=True,
-    )
-
-    ############################################################
-    # TODO: updated position command, (this may not be needed)
-
-    ############################################################
-
-    # velocity = mdp.UniformVelocityCommandCfg(
-    #     asset_name="robot",
-    #     heading_command=True,  # use heading instead of angular vel
-    #     rel_standing_envs=0.1,  # 10% of the time, stand still
-    #     rel_heading_envs=0.7,  # 70% of the time, use heading instead of angular z
-    #     ranges=mdp.UniformVelocityCommandCfg.Ranges(
-    #         lin_vel_x=(-1, 1),
-    #         lin_vel_y=(-1, 1),
-    #         ang_vel_z=(-math.pi / 4, math.pi / 4),  # 25 deg/s max
-    #         heading=(-math.pi, math.pi),
-    #     ),
-    #     resampling_time_range=(5, 10),
-    #     debug_vis=True,
-    # )
-
-
-@configclass
 class ObservationsCfg:
     """Observation specifications for the MDP."""
 
@@ -170,8 +131,14 @@ class ObservationsCfg:
         """Observations for policy group."""
 
         # observation terms (order preserved)
-        joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
-        joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
+        joint_pos_rel = ObsTerm(
+            func=mdp.joint_pos_rel,
+            noise=AdditiveUniformNoiseCfg(n_min=-0.1, n_max=0.1),
+        )
+        joint_vel_rel = ObsTerm(
+            func=mdp.joint_vel_rel,
+            noise=AdditiveUniformNoiseCfg(n_min=-0.1, n_max=0.1),
+        )
 
         # relevant IMU data
         imu_orientation = ObsTerm(
@@ -184,20 +151,13 @@ class ObservationsCfg:
             func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
         )
 
-        base_height = ObsTerm(
-            func=mdp.base_pos_z, params={"asset_cfg": SceneEntityCfg("robot")}
-        )
-
         # command
         # velocity_cmd = ObsTerm(
         #     func=mdp.generated_commands, params={"command_name": "velocity"}
         # )
 
-        # height command
-        actions = ObsTerm(func=mdp.last_action)
-
         def __post_init__(self) -> None:
-            self.enable_corruption = False  # TODO: turn on later
+            self.enable_corruption = True
             self.concatenate_terms = True
 
     # observation groups
@@ -214,7 +174,7 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
-            "position_range": (-0.25, 0.25),
+            "position_range": (-1.5, 1.5),
             "velocity_range": (-1.0, 1.0),
         },
     )
@@ -227,7 +187,7 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
+                "z": (0.0, 0.5),
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
                 "yaw": (-math.pi, math.pi),
@@ -236,48 +196,60 @@ class EventCfg:
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
                 "z": (0.0, 0.0),
-                "roll": (0.0, 0.0),
-                "pitch": (0.0, 0.0),
+                "roll": (-0.5, 0.5),
+                "pitch": (-0.5, 0.5),
                 "yaw": (0.0, 0.0),
             },
         },
     )
 
 
+class RewardConstants:
+    """Constants for rewards."""
+
+    sitting_joint_pos = {
+        k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
+        for k, v in {
+            "[F,R]R_hip_joint": -32.0,
+            "[F,R]L_hip_joint": 32.0,
+            ".*_thigh_joint": 57.0,
+            ".*_calf_joint": -149.0,
+        }.items()
+    }
+
+
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # Positional locality for feet, limit "skidding"
+    # definition of reward terms (order preserved)
 
-    # Track base height (CoM)
-    base_com_height = RewTerm(
-        func=mdp.base_height_from_command,
+    # joint error to a target joint state (fixed)
+    joint_error = RewTerm(  # normal L2 squared penalty
+        func=mdp.joint_pos_target_error_l2,
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
-            "command_name": "height",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
+            "target": RewardConstants.sitting_joint_pos,
         },
-        weight=-0.3,
+        weight=-0.01,
     )
-
-    base_com_height_fine = RewTerm(
-        func=mdp.base_height_from_command,
+    joint_error_fine = RewTerm(  # fine grained tanh reward
+        func=mdp.joint_pos_target_error_l2,
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
-            "command_name": "height",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
+            "target": RewardConstants.sitting_joint_pos,
             "use_tanh": True,
-            "tanh_scale": 0.18,  # d/dx f(x) = -1 at around x=18.5cm if scale=0.18
         },
-        weight=0.5,
+        weight=0.01,
     )
 
-    # Track base velocity (CoM)
+    # minimize base linear velocity in all directions
     base_lin_vel_xy = RewTerm(
         func=mdp.body_lin_vel_l2,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=-0.005,
+        weight=-0.1,
     )
 
     # Track base orientation (CoM)
@@ -293,8 +265,17 @@ class RewardsCfg:
     # min_torque = RewTerm(
     #     func=mdp.joint_torques_l2,
     #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
-    #     weight=0,
+    #     weight=-5e-7,
     # )
+
+    # feet shouldn't have any air time
+    feet_air_time = RewTerm(
+        func=mdp.air_time_penalty,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
+        },
+        weight=-0.2,
+    )
 
     # Feet must be in contact with the ground
     feet_contacting_ground = RewTerm(
@@ -303,41 +284,42 @@ class RewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
             "threshold": 50.0,
         },  # at least 50N per foot
-        weight=-0.3,  # penalize if any foot is not contacting ground
+        weight=-0.2,  # penalize if any foot is not contacting ground
     )
 
-    feet_not_slipping = RewTerm(
-        func=mdp.foot_slip_penalty,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
-            "asset_cfg": SceneEntityCfg("robot", body_names=[".*_foot"]),
-            "contact_threshold": 1.0,  # any contact + movement = slip
-            "slip_threshold": 0.5,
-        },
-        weight=-0.3,
-    )
+    # feet_not_slipping = RewTerm(
+    #     func=mdp.foot_slip_penalty,
+    #     params={
+    #         "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=[".*_foot"]),
+    #         "contact_threshold": 1.0,  # any contact + movement = slip
+    #         "slip_threshold": 0.5,
+    #     },
+    #     weight=-0.3,
+    # )
 
     # reward gentle body contact with the ground, but not too much
-    body_ground_contact = RewTerm(
-        func=mdp.sparse_threshold_contact_reward,
+    body_threshold_contact = RewTerm(
+        func=mdp.threshold_contact_reward,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
-            "max_threshold": 3.0,  # 3 N contact limit (above this is too harsh)
-            "value_clip": 1.0,
+            "no_contact_penalty": 0.5,  # penalty 0.5 for no contact
+            "max_thresholds_offset": 100.0,  # 100 N above trigger is too much, starts penalizing
+            "trigger_threshold": 350.0,  # minimum force to start rewarding/penalizing
         },
-        weight=0.5,
+        weight=0.05,
     )
 
     # penalize joint and action rate
     joint_vel = RewTerm(
         func=mdp.joint_vel_l2,
         params={"asset_cfg": SceneEntityCfg("robot")},
-        weight=-0.0005,
+        weight=-5e-4,
     )
 
     action_rt = RewTerm(
         func=mdp.action_rate_l2,
-        weight=-0.0005,
+        weight=-5e-4,
     )
 
     ############################################################
@@ -353,14 +335,14 @@ class RewardsCfg:
 class CurriculumsCfg:
     """Curriculum settings for the MDP."""
 
-    # increase lin vel penalty over time
+    # # increase lin vel penalty over time
     base_lin_vel_xy = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "base_lin_vel_xy",
-            "w0": -0.005,
-            "w1": -0.05,
-            "t0": 3000,
+            "w0": -0.1,
+            "w1": -0.3,
+            "t0": 0,
             "t1": 8000,
         },
     )
@@ -371,23 +353,59 @@ class CurriculumsCfg:
         params={
             "term_name": "feet_contacting_ground",
             "w0": -0.2,
-            "w1": -0.8,
-            "t0": 0,
-            "t1": 10000,
-        },
-    )
-
-    # increase feet slip penalty over time
-    feet_not_slipping = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "feet_not_slipping",
-            "w0": -0.05,
-            "w1": -0.4,
-            "t0": 5000,
+            "w1": -0.5,
+            "t0": 1500,
             "t1": 15000,
         },
     )
+
+    # increase air time penalty over time
+    feet_air_time = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "feet_air_time",
+            "w0": -0.2,
+            "w1": -0.5,
+            "t0": 1500,
+            "t1": 15000,
+        },
+    )
+
+    # increase body contact threshold at the end to make the body touch the ground
+    body_threshold_contact = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "body_threshold_contact",
+            "w0": 0.05,
+            "w1": 0.8,
+            "t0": 20000,
+            "t1": 25000,
+        },
+    )
+
+    # # increase feet slip penalty over time
+    # feet_not_slipping = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "feet_not_slipping",
+    #         "w0": -0.05,
+    #         "w1": -0.4,
+    #         "t0": 5000,
+    #         "t1": 15000,
+    #     },
+    # )
+
+    # penalize joint torque more over time
+    # min_torque = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "min_torque",
+    #         "w0": -5e-9,
+    #         "w1": -5e-7,
+    #         "t0": 5000,
+    #         "t1": 10000,
+    #     },
+    # )
 
     # increase joint position rate penalty over time
     joint_vel = CurrTerm(
@@ -396,8 +414,8 @@ class CurriculumsCfg:
             "term_name": "joint_vel",
             "w0": -5e-4,
             "w1": -0.1,
-            "t0": 0,
-            "t1": 15000,
+            "t0": 5000,
+            "t1": 10000,
         },
     )
     # increase joint action rate penalty over time
@@ -407,8 +425,8 @@ class CurriculumsCfg:
             "term_name": "action_rt",
             "w0": -5e-4,
             "w1": -0.1,
-            "t0": 0,
-            "t1": 15000,
+            "t0": 5000,
+            "t1": 10000,
         },
     )
 
@@ -424,8 +442,15 @@ class TerminationsCfg:
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 400,
+            "threshold": 600,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
+        },
+    )
+    bad_orientation = DoneTerm(
+        func=mdp.bad_orientation,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+            "limit_angle": math.radians(120.0),
         },
     )
 
@@ -442,7 +467,6 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         num_envs=2048, env_spacing=3.0
     )
     # Basic settings
-    commands: CommandCfg = CommandCfg()
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     events: EventCfg = EventCfg()
