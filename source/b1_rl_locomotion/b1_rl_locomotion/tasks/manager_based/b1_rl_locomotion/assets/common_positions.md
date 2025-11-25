@@ -20,6 +20,8 @@ These are some common positions that has been recorded from the real robot. If y
 | RL_thigh_joint | 60.22875047 | 57 |
 | RL_calf_joint | -150.47269717 | -149 |
 
+Initial Z Height: 0.12258
+
 **Raw radian values recorded from the robot, order preserved:**
 ```
 [-0.558384,1.078270,-2.751709,0.534135,1.089023,-2.739185,-0.584137,1.067164,-2.622180,0.544445,1.051190,-2.626244]
@@ -77,6 +79,8 @@ These are some common positions that has been recorded from the real robot. If y
 | RL_hip_joint | 1.8203442109101384 | 1.5 |
 | RL_thigh_joint | 42.514557018517834 | 42 |
 | RL_calf_joint | -79.40306955930757 | -79 |
+
+Initial Z Height: 0.556
 
 **Raw radian values recorded from the robot, order preserved:**
 ```
