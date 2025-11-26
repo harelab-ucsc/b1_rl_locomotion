@@ -5,14 +5,23 @@ the curriculum introduced by the function.
 """
 
 from __future__ import annotations
-
+from isaaclab.envs import mdp
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
-
+# define a function to check time step for modification condition
+def override_value(env: ManagerBasedRLEnv,
+                   env_ids: Sequence[int],
+                   data,
+                   value,
+                   num_steps: int):
+    if env.common_step_counter > num_steps:
+        return value
+    return mdp.modify_term_cfg.NO_CHANGE
+    
 def lerp_reward_weight(
     env: ManagerBasedRLEnv,
     env_ids: Sequence[int],

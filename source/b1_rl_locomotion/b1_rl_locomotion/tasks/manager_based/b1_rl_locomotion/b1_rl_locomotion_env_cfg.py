@@ -29,6 +29,13 @@ from . import mdp
 from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_CFG
 
 ##
+# Constants
+##
+
+FOOT_GROUND_WEIGHT = -0.22
+SLIPPING_WEIGHT = -0.005
+
+##
 # Scene definition
 ##
 
@@ -64,14 +71,45 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=["/World/ground"],
     )
 
-    contact_forces_feet = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_foot",
+
+    # We need the foot contacts to be seperate because of the functionality of desired_contacts reward function
+    # There is only a negative reward if NONE of the desired contacts are present.
+    contact_forces_RL_foot = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/RL_foot",
         update_period=0.0,
         history_length=6,
         force_threshold=0.0,
         debug_vis=True,
         filter_prim_paths_expr=["/World/ground"],
     )
+
+    contact_forces_RR_foot = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/RR_foot",
+        update_period=0.0,
+        history_length=6,
+        force_threshold=0.0,
+        debug_vis=True,
+        filter_prim_paths_expr=["/World/ground"],
+    )
+
+    contact_forces_FL_foot = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/FL_foot",
+        update_period=0.0,
+        history_length=6,
+        force_threshold=0.0,
+        debug_vis=True,
+        filter_prim_paths_expr=["/World/ground"],
+    )
+
+    contact_forces_FR_foot = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/FR_foot",
+        update_period=0.0,
+        history_length=6,
+        force_threshold=0.0,
+        debug_vis=True,
+        filter_prim_paths_expr=["/World/ground"],
+    )
+
 
     # lights
     dome_light = AssetBaseCfg(
@@ -235,10 +273,23 @@ class EventCfg:
         },
     )
 
+    #apply_forces = EventTerm(
+    #    func=mdp.apply_external_force_torque,
+    #    mode="interval",
+    #    interval_range_s=(3, 10),
+    #    params={
+    #        "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #        "force_range": (0, 0),
+    #        "torque_range": (0,0),  # Only apply forces, not torques
+    #
+    #    }
+    #)
+
 
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
+
 
     # Track base height (CoM)
     base_com_height = RewTerm(
@@ -276,7 +327,7 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=-0.15,
+        weight=-0.45
     )
 
     # base_x_y_diff = RewTerm(
@@ -305,13 +356,101 @@ class RewardsCfg:
     center_hips = RewTerm(
         func=mdp.center_joints_pos,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_joint"])},
-        weight=-0.1,
+        weight=-0.2,
+    )
+
+    # We need four of these to actually have a penalty given the definition of desired_contacts
+    ######################
+    feet_contacting_ground_RL = RewTerm(
+        func=mdp.desired_contacts,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces_RL_foot")},
+        weight=FOOT_GROUND_WEIGHT,
     )
 
     feet_contacting_ground = RewTerm(
         func=mdp.desired_contacts,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces_feet")},
+        params={"sensor_cfg": SceneEntityCfg("contact_forces_RR_foot")},
+        weight=FOOT_GROUND_WEIGHT,
+    )
+
+    feet_contacting_ground = RewTerm(
+        func=mdp.desired_contacts,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces_FL_foot")},
+        weight=FOOT_GROUND_WEIGHT,
+    )
+
+    feet_contacting_ground = RewTerm(
+        func=mdp.desired_contacts,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces_FR_foot")},
+        weight=FOOT_GROUND_WEIGHT,
+    )
+    ######################
+
+    thigh_contacting_ground = RewTerm(
+        func=mdp.undesired_contacts,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces_thighs"),
+                "threshold": 0.15},
         weight=-0.15,
+    )
+
+    front_mirror_calf = RewTerm(
+        func=mdp.joint_mirror_l1,
+        params={"asset_cfg": SceneEntityCfg("robot",
+                                            joint_names=["FR_calf_joint", "FL_calf_joint"])},
+        weight=-0.1
+    )
+
+    front_mirror_thigh = RewTerm(
+        func=mdp.joint_mirror_l1,
+        params={"asset_cfg": SceneEntityCfg("robot",
+                                            joint_names=["FR_thigh_joint", "FL_thigh_joint"])},
+        weight=-0.1
+    )
+
+    rear_mirror_calf = RewTerm(
+        func=mdp.joint_mirror_l1,
+        params={"asset_cfg": SceneEntityCfg("robot",
+                                            joint_names=["RR_calf_joint", "RL_calf_joint"])},
+        weight=-0.1
+    )
+
+    rear_mirror_thigh = RewTerm(
+        func=mdp.joint_mirror_l1,
+        params={"asset_cfg": SceneEntityCfg("robot",
+                                            joint_names=["RR_thigh_joint", "RL_thigh_joint"])},
+        weight=-0.1
+    )
+
+    slipping = RewTerm(
+        func=mdp.slipping_l2,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=["RL_foot"]),
+                "sensor_cfg": SceneEntityCfg("contact_forces_RL_foot"),
+                "threshold": 0.15},
+        weight=SLIPPING_WEIGHT
+    )
+
+    slipping = RewTerm(
+        func=mdp.slipping_l2,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=["RR_foot"]),
+                "sensor_cfg": SceneEntityCfg("contact_forces_RR_foot"),
+                "threshold": 0.15},
+        weight=SLIPPING_WEIGHT
+    )
+
+    slipping = RewTerm(
+        func=mdp.slipping_l2,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=["FL_foot"]),
+                "sensor_cfg": SceneEntityCfg("contact_forces_FL_foot"),
+                "threshold": 0.15},
+        weight=SLIPPING_WEIGHT
+    )
+
+    slipping = RewTerm(
+        func=mdp.slipping_l2,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=["FR_foot"]),
+                "sensor_cfg": SceneEntityCfg("contact_forces_FR_foot"),
+                "threshold": 0.15},
+        weight=SLIPPING_WEIGHT
     )
 
     # penalize joint and action rate
@@ -323,7 +462,7 @@ class RewardsCfg:
 
     action_rt = RewTerm(
         func=mdp.action_rate_l2,
-        weight=-0.0005,
+        weight=-0.1,
     )
 
     ############################################################
@@ -332,12 +471,81 @@ class RewardsCfg:
     # alive = RewTerm(func=mdp.is_alive, weight=1.0)
 
     # (2) Failure penalty
-    terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+    terminating = RewTerm(func=mdp.is_terminated, weight=-3.0)
 
 
 @configclass
 class CurriculumsCfg:
-    """Curriculum settings for the MDP."""
+    """Curriculum settings for the MDP. Currently in testing"""
+    #apply_forces_i1 = CurrTerm(
+    #    func=mdp.modify_term_cfg,
+    #    params={
+    #        "address": "b1_rl_locomotion_env_cfg.EventCfg.apply_forces.params",   # note: `_manager.cfg` is omitted
+    #        "modify_fn": "mdp.override_value",
+    #        "modify_params": {"value": {"asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #                                    "force_range": (3, 7),
+    #                                    "torque_range": (0,0) # Only apply forces, not torques
+    #                                    },  
+    #                        "num_steps": 15000
+    #        }
+    #    }                      
+    #)
+
+    #apply_forces_i2 = CurrTerm(
+    #    func=mdp.modify_term_cfg,
+    #    params={
+    #        "address": "b1_rl_locomotion_env_cfg.EventCfg.apply_forces.params",   # note: `_manager.cfg` is omitted
+    #        "modify_fn": "mdp.override_value",
+    #        "modify_params": {"value": {"asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #                                    "force_range": (3, 15),
+    #                                    "torque_range": (0,0) # Only apply forces, not torques
+    #                                    },  
+    #                        "num_steps": 10000
+    #        }
+    #    }                      
+    #)
+
+    #apply_forces_i3 = CurrTerm(
+    #    func=mdp.modify_term_cfg,
+    #    params={
+    #        "address": "b1_rl_locomotion_env_cfg.EventCfg.apply_forces.params",   # note: `_manager.cfg` is omitted
+    #        "modify_fn": "mdp.override_value",
+    #        "modify_params": {"value": {"asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #                                    "force_range": (3, 25),
+    #                                    "torque_range": (0,0) # Only apply forces, not torques
+    #                                    },  
+    #                        "num_steps": 14000
+    #        }
+    #    }                      
+    #)
+
+    #apply_forces_i4 = CurrTerm(
+    #    func=mdp.modify_term_cfg,
+    #    params={
+    #        "address": "b1_rl_locomotion_env_cfg.EventCfg.apply_forces.params",   # note: `_manager.cfg` is omitted
+    #        "modify_fn": "mdp.override_value",
+    #        "modify_params": {"value": {"asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #                                    "force_range": (3, 40),
+    #                                    "torque_range": (0,0) # Only apply forces, not torques
+    #                                    },  
+    #                        "num_steps": 16000
+    #        }
+    #    }                      
+    #)
+
+    #apply_forces_i5 = CurrTerm(
+    #    func=mdp.modify_term_cfg,
+    #    params={
+    #        "address": "b1_rl_locomotion_env_cfg.EventCfg.apply_forces.params",   # note: `_manager.cfg` is omitted
+    #        "modify_fn": "mdp.override_value",
+    #        "modify_params": {"value": {"asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #                                    "force_range": (3, 50),
+    #                                    "torque_range": (0,0) # Only apply forces, not torques
+    #                                    },  
+    #                        "num_steps": 20000
+    #        }
+    #    }                      
+    #)
 
     # set center_hips very high at the start, then lower it over time
     center_hips = CurrTerm(
@@ -369,10 +577,22 @@ class CurriculumsCfg:
         params={
             "term_name": "feet_contacting_ground",
             "w0": -0.1,
-            "w1": -0.8,
+            "w1": FOOT_GROUND_WEIGHT,
             "t0": 3000,
             "t1": 14000,
         },
+    )
+
+    # increase anti slipping over time
+    slipping = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "slipping",
+            "w0": -0.1,
+            "w1": SLIPPING_WEIGHT,
+            "t0": 8000,
+            "t1": 19000,
+        }
     )
 
     # increase joint position rate penalty over time
@@ -436,7 +656,7 @@ class TerminationsCfg:
 class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: B1RlLocomotionSceneCfg = B1RlLocomotionSceneCfg(
-        num_envs=1024, env_spacing=3.0
+        num_envs=4096, env_spacing=3.0
     )
     # Basic settings
     commands: CommandCfg = CommandCfg()

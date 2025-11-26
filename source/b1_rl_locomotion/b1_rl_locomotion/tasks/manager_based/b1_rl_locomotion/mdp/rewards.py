@@ -114,3 +114,39 @@ def base_x_y_diff(
 
     # Return per-env scalar (sum of x² + y²)
     return torch.sum(diff_xy, dim=1)
+
+
+def joint_mirror_l1(env: ManagerBasedRLEnv,
+                    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot",
+                                                               joint_names=[".*_joint", ".*_joint"])) -> torch.Tensor:
+    """Penalize joint positions that deviate from one another"""
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    # compute out of limits constraints
+    angle = asset.data.joint_pos[:, asset_cfg.joint_ids[0]] - asset.data.joint_pos[:, asset_cfg.joint_ids[1]]
+    return torch.abs(angle)
+
+def slipping_l2(env: ManagerBasedRLEnv,
+                asset_cfg: SceneEntityCfg = SceneEntityCfg("robot",
+                                                           body_names=[".*_foot"]),
+                sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces.*_foot"),
+                threshold = 1.0) -> torch.Tensor:
+    """Penalize x y movement when foot is on the ground (experiencing contact force)"""
+    # extract the used quantities (to enable type-hinting)
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    asset: Articulation = env.scene[asset_cfg.name]
+    # compute forces and linear xy velocity
+    net_contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
+    body_lin_vel_xy = asset.data.body_com_lin_vel_w[:, asset_cfg.body_ids, :2]
+    # find force and vel norms
+    body_lin_vel_xy_norm = body_lin_vel_xy.norm(dim=-1)
+    force_norm = net_contact_forces.norm(dim=-1)
+    # use most recent contact update
+    contact = force_norm.max(dim=1)[0] > threshold
+    # compute penalty
+    # print(f"DEBUGGING: {torch.mean(body_lin_vel_xy_norm**2)}")
+    penalty = torch.where(contact,
+                          body_lin_vel_xy_norm ** 2,
+                          torch.full_like(body_lin_vel_xy_norm, 5)) # TODO: tune this pad <-
+    return penalty.sum(dim=1)
+
