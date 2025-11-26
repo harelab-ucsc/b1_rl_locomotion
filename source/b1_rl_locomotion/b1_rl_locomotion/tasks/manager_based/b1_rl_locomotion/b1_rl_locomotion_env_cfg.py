@@ -377,7 +377,7 @@ class RewardsCfg:
             "max_thresholds_offset": 300.0,  # 300 N above trigger is too much, starts penalizing
             "trigger_threshold": 100.0,  # minimum force to start rewarding/penalizing
         },
-        weight=-0.5,
+        weight=0.5,
     )
 
     # feet_not_slipping = RewTerm(
