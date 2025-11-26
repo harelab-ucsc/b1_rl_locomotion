@@ -124,15 +124,16 @@ def joint_pos_target_error_l2(
     #     robot.data.joint_pos[: len(joint_names)].shape,
     # )
 
-    # compute squared L2 error
+    # compute squared L2 error (instead of doing a norm for all joints, do the max diff in all joints)
     joint_pos = robot.data.joint_pos[:, asset_cfg.joint_ids]
     diff = joint_pos - desired_pos
-    error_l2 = torch.norm(diff, dim=1)
-    error_l2_squared = error_l2.square()
+
+    max_error_l2 = torch.max(torch.abs(diff), dim=1).values
+    error_l2_squared = max_error_l2.square()  # squared L2 norm
 
     if use_tanh:
         # Apply tanh to convert to a reward (higher is better)
-        error_l2_tanh = (1 - torch.tanh(error_l2 / tanh_scale)) ** 2
+        error_l2_tanh = (1 - torch.tanh(max_error_l2 / tanh_scale)) ** 2
         return error_l2_tanh
 
     return error_l2_squared

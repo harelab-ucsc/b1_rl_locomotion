@@ -208,7 +208,7 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.0, 0.1),
+                "z": (0.0, 0.75),
                 "roll": (-0.5, 0.5),
                 "pitch": (-0.5, 0.5),
                 "yaw": (-math.pi, math.pi),
@@ -339,7 +339,7 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=-1.0,
+        weight=-2.5,
     )
 
     # Minimize joint torques
@@ -498,7 +498,7 @@ class CurriculumsCfg:
         params={
             "term_name": "joint_vel",
             "w0": -5e-4,
-            "w1": -0.1,
+            "w1": -1e-2,
             "t0": 0,
             "t1": 10000,
         },
@@ -507,8 +507,8 @@ class CurriculumsCfg:
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "joint_vel",
-            "w0": -0.1,
-            "w1": -0.3,
+            "w0": -1e-2,
+            "w1": -0.05,
             "t0": 10001,
             "t1": 30000,
         },
@@ -518,8 +518,8 @@ class CurriculumsCfg:
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "action_rt",
-            "w0": -5e-4,
-            "w1": -0.15,
+            "w0": -0.1,
+            "w1": -0.5,
             "t0": 0,
             "t1": 15000,
         },
@@ -529,7 +529,7 @@ class CurriculumsCfg:
         params={
             "term_name": "action_rt",
             "w0": -0.5,
-            "w1": -0.9,
+            "w1": -1.5,
             "t0": 15001,
             "t1": 25000,
         },
@@ -542,9 +542,9 @@ class CurriculumsCfg:
         params={
             "term_name": "joint_error",
             "w0": -0.01,
-            "w1": -0.6,
+            "w1": -0.5,
             "t0": 10000,
-            "t1": 20000,
+            "t1": 15000,
         },
     )
     joint_error_fine = CurrTerm(
@@ -552,9 +552,9 @@ class CurriculumsCfg:
         params={
             "term_name": "joint_error_fine",
             "w0": 0.01,
-            "w1": 0.5,
+            "w1": 1.5,
             "t0": 10000,
-            "t1": 20000,
+            "t1": 15000,
         },
     )
     base_height = CurrTerm(
