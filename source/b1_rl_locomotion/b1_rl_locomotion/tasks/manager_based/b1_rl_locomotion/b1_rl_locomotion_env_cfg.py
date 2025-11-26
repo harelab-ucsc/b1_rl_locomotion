@@ -369,16 +369,16 @@ class RewardsCfg:
     )
 
     # minimize feet contact forces at all times
-    sparse_feet_contact_forces = RewTerm(
-        func=mdp.threshold_contact_reward,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
-            "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
-            "max_thresholds_offset": 300.0,  # 300 N above trigger is too much, starts penalizing
-            "trigger_threshold": 100.0,  # minimum force to start rewarding/penalizing
-        },
-        weight=0.5,
-    )
+    # sparse_feet_contact_forces = RewTerm(
+    #     func=mdp.threshold_contact_reward,
+    #     params={
+    #         "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
+    #         "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
+    #         "max_thresholds_offset": 300.0,  # 300 N above trigger is too much, starts penalizing
+    #         "trigger_threshold": 100.0,  # minimum force to start rewarding/penalizing
+    #     },
+    #     weight=0.5,
+    # )
 
     # feet_not_slipping = RewTerm(
     #     func=mdp.foot_slip_penalty,
