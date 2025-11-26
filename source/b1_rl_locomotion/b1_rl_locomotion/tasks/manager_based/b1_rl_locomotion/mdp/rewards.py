@@ -50,7 +50,8 @@ def base_height_from_command(
     # Current CoM world position of the base (rigid body center of mass)
     curr_pos_w = robot.data.body_com_pose_w[:, asset_cfg.body_ids[0], :3]  # type: ignore
     # Compute per-env height deviation (ignore xy)
-    height_err = torch.square(torch.abs(curr_pos_w[:, 2] - des_pos_b[:, 2]))
+    height_err = torch.abs(curr_pos_w[:, 2] - des_pos_b[:, 2])
+    height_err_square = torch.square(height_err)
 
     # # Debug prints
     # print("-------------------------------")
@@ -63,9 +64,10 @@ def base_height_from_command(
 
     if use_tanh:
         # Apply tanh to convert to a reward (higher is better)
-        height_err = 1 - torch.tanh(height_err / tanh_scale)
+        height_err_tanh = torch.square(1 - torch.tanh(height_err / tanh_scale))
+        return height_err_tanh
 
-    return height_err
+    return height_err_square
 
 
 def joint_pos_target_error_l2(
@@ -73,7 +75,7 @@ def joint_pos_target_error_l2(
     asset_cfg: SceneEntityCfg,
     target: dict[str, float],
     use_tanh: bool = False,  # when True, applies tanh to height error (becomes a reward instead of a penalty)
-    tanh_scale: float = 0.16,  # d/dx f(x) = -1 at around x=0.5rad if scale=0.16, where f(x)= 1-tanh(err^2 / scale)
+    tanh_scale: float = 0.5,  # d/dx f(x) = -1 at around x=20deg(~0.35rad) if scale=0.5, where f(x)= (1-tanh(err / scale)^2
 ) -> torch.Tensor:
     """Penalize asset joint position from target joint position.
 
@@ -125,12 +127,13 @@ def joint_pos_target_error_l2(
     # compute squared L2 error
     joint_pos = robot.data.joint_pos[:, asset_cfg.joint_ids]
     diff = joint_pos - desired_pos
-    error_l2_squared = torch.norm(diff, dim=1).square()
+    error_l2 = torch.norm(diff, dim=1)
+    error_l2_squared = error_l2.square()
 
     if use_tanh:
         # Apply tanh to convert to a reward (higher is better)
-        error_l2 = 1 - torch.tanh(error_l2_squared / tanh_scale)
-        return error_l2
+        error_l2_tanh = (1 - torch.tanh(error_l2 / tanh_scale)) ** 2
+        return error_l2_tanh
 
     return error_l2_squared
 
