@@ -77,17 +77,33 @@ def joint_pos_target_error_l2(
     use_tanh: bool = False,  # when True, applies tanh to height error (becomes a reward instead of a penalty)
     tanh_scale: float = 0.5,  # d/dx f(x) = -1 at around x=20deg(~0.35rad) if scale=0.5, where f(x)= (1-tanh(err / scale)^2
 ) -> torch.Tensor:
-    """Penalize asset joint position from target joint position.
-
-    This function retrieves the target height from a pose command and computes
-    the diff between the asset's current center of mass (CoM) height and the desired height.
-
-    return the squared L2 norm of the joint position error (per env) if use_tanh is False. I.e.,
-        error = (|| joint_pos - target_pos ||_2)^2
-    otherwise return a reward based on the tanh of the squared error, where
-        reward = 1 - tanh(error / tanh_scale) and
-        error = (|| joint_pos - target_pos ||_2)^2
     """
+    Joint-position tracking penalty or reward.
+
+    Computes the deviation between the robot's current joint positions and
+    target joint positions specified by a regex-keyed dictionary.
+
+    If use_tanh is False:
+        Returns a per-environment penalty equal to the squared L2 norm:
+            penalty = || q - q* ||₂²
+                    = sum_j (q_j - q*_j)²
+
+    If use_tanh is True:
+        Computes a per-joint reward using the shaping:
+            r_j = (1 - tanh(|q_j - q*_j| / tanh_scale))²
+        and returns the per-environment reward obtained by averaging across joints:
+            reward = mean_j r_j
+
+    Args:
+        asset_cfg: Configuration specifying which robot joints to evaluate.
+        target: Dict mapping regex patterns → desired joint angles (radians).
+        use_tanh: Whether to output a shaped reward instead of a penalty.
+        tanh_scale: Scale parameter controlling tanh saturation.
+
+    Returns:
+        Tensor of shape [num_envs], one scalar penalty or reward per environment.
+    """
+
     robot: Articulation = env.scene[asset_cfg.name]
 
     # convert desired joint positions to tensor
@@ -124,16 +140,21 @@ def joint_pos_target_error_l2(
     #     robot.data.joint_pos[: len(joint_names)].shape,
     # )
 
-    # compute squared L2 error (instead of doing a norm for all joints, do the max diff in all joints)
+    # compute squared L2 square error
     joint_pos = robot.data.joint_pos[:, asset_cfg.joint_ids]
     diff = joint_pos - desired_pos
 
-    max_error_l2 = torch.max(torch.abs(diff), dim=1).values
-    error_l2_squared = max_error_l2.square()  # squared L2 norm
+    error_l2_squared = diff.square().sum(dim=1)  # squared L2 norm
 
     if use_tanh:
-        # Apply tanh to convert to a reward (higher is better)
-        error_l2_tanh = (1 - torch.tanh(max_error_l2 / tanh_scale)) ** 2
+        # per-joint absolute errors
+        abs_diff = diff.abs()  # [N, J]
+
+        # per-joint rewards from tanh shaping
+        per_joint_reward = (1.0 - torch.tanh(abs_diff / tanh_scale)) ** 2  # [N, J]
+
+        # aggregate over joints to a per-env scalar
+        error_l2_tanh = per_joint_reward.mean(dim=1)  # [N]
         return error_l2_tanh
 
     return error_l2_squared
@@ -238,35 +259,39 @@ def threshold_contact_reward(
     sensor_cfg: SceneEntityCfg,
     no_contact_penalty: float = 0.2,
     max_thresholds_offset: float = 200.0,  # 200 N above trigger is too much, starts penalizing
-    trigger_threshold: float = 588,  # minimum force to start rewarding/penalizing
+    trigger_threshold: float = 588.0,  # minimum force at which we start scaling reward; below this we apply no_contact_penalty
 ) -> torch.Tensor:
     """
     Reward based on contact sensor net force with thresholds.
-    Basically, reward gentle contact, penalize too much contact.
-    Also penalize no contact with a fixed penalty if no_contact_penalty > 0.
+    Reward gentle contact, penalize too much contact, optionally penalize
+    no/very weak contact with a fixed penalty.
 
-    - max_force < max_threshold = positive reward (gentle contact)
-    - max_force = max_threshold = zero
-    - max_force > max_threshold = negative reward (too strong contact)
+    Let max_threshold = trigger_threshold + max_thresholds_offset.
+
+    - max_force <= trigger_threshold: constant penalty = -no_contact_penalty
+    - trigger_threshold < max_force < max_threshold: positive reward,
+      decreasing linearly from 1 down to 0
+    - max_force = max_threshold: zero reward
+    - max_force > max_threshold: negative reward (too strong contact)
     """
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
 
-    net_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]  # type: ignore
-    force_magnitudes = net_forces.norm(dim=-1)
-    max_force, _ = force_magnitudes.max(dim=1)
+    # N = num envs, H = history length, B = num bodies
+    net_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]  # type: ignore # [N, H, B, 3]
+    force_magnitudes = net_forces.norm(dim=-1)  # [N, H, B]
+    max_force, _ = force_magnitudes.max(dim=1)  # [N, B]
 
     # print("[DEBUG] Threshold contact reward: max_force =", max_force, max_force.shape)
 
-    # trigger mask
-    mask = (max_force > trigger_threshold).float()
+    mask = (max_force > trigger_threshold).float()  # [N, B]
 
-    # linearly shape around max_threshold. I.e., c(x) = -(x-trigger)/offset + 1
     raw_rew = -(max_force - trigger_threshold) / max_thresholds_offset + 1.0
-    raw_rew += no_contact_penalty  # apply no contact penalty so we can offset it later
+    raw_rew += no_contact_penalty  # [N, B]
 
-    # apply mask and offset by no contact penalty
-    reward = (raw_rew * mask) - no_contact_penalty  # envs x 1, need to squeeze
-    reward = reward.squeeze(1)
+    reward = (raw_rew * mask) - no_contact_penalty  # [N, B]
+
+    # average over all bodies
+    reward = reward.mean(dim=1)  # [N]
 
     # print("[DEBUG] Sparse threshold contact reward:", reward, reward.shape)
 
