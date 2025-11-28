@@ -488,113 +488,113 @@ class CurriculumCfg:
     joint_error = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "joint_error",
-            "start_weight": RewardSettings.c1.joint_error,
-            "end_weight": RewardSettings.c2.joint_error,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "joint_error",
+            "w0": RewardSettings.c1.joint_error,
+            "w1": RewardSettings.c2.joint_error,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
     joint_error_fine = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "joint_error_fine",
-            "start_weight": RewardSettings.c1.joint_error_fine,
-            "end_weight": RewardSettings.c2.joint_error_fine,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "joint_error_fine",
+            "w0": RewardSettings.c1.joint_error_fine,
+            "w1": RewardSettings.c2.joint_error_fine,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
     base_height = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "base_height",
-            "start_weight": RewardSettings.c1.base_height,
-            "end_weight": RewardSettings.c2.base_height,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "base_height",
+            "w0": RewardSettings.c1.base_height,
+            "w1": RewardSettings.c2.base_height,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
     base_height_fine = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "base_height_fine",
-            "start_weight": RewardSettings.c1.base_height_fine,
-            "end_weight": RewardSettings.c2.base_height_fine,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "base_height_fine",
+            "w0": RewardSettings.c1.base_height_fine,
+            "w1": RewardSettings.c2.base_height_fine,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
     base_lin_vel_z = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "base_lin_vel_z",
-            "start_weight": RewardSettings.c1.base_lin_vel_z,
-            "end_weight": RewardSettings.c2.base_lin_vel_z,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "base_lin_vel_z",
+            "w0": RewardSettings.c1.base_lin_vel_z,
+            "w1": RewardSettings.c2.base_lin_vel_z,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
 
     base_lin_vel_xy = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "base_lin_vel_xy",
-            "start_weight": RewardSettings.c1.base_lin_vel_xy,
-            "end_weight": RewardSettings.c2.base_lin_vel_xy,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "base_lin_vel_xy",
+            "w0": RewardSettings.c1.base_lin_vel_xy,
+            "w1": RewardSettings.c2.base_lin_vel_xy,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
     base_flat_orientation = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "base_flat_orientation",
-            "start_weight": RewardSettings.c1.base_flat_orientation,
-            "end_weight": RewardSettings.c2.base_flat_orientation,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "base_flat_orientation",
+            "w0": RewardSettings.c1.base_flat_orientation,
+            "w1": RewardSettings.c2.base_flat_orientation,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
     feet_air_time = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "feet_air_time",
-            "start_weight": RewardSettings.c1.feet_air_time,
-            "end_weight": RewardSettings.c2.feet_air_time,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "feet_air_time",
+            "w0": RewardSettings.c1.feet_air_time,
+            "w1": RewardSettings.c2.feet_air_time,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
     feet_contacting_ground = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "feet_contacting_ground",
-            "start_weight": RewardSettings.c1.feet_contacting_ground,
-            "end_weight": RewardSettings.c2.feet_contacting_ground,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "feet_contacting_ground",
+            "w0": RewardSettings.c1.feet_contacting_ground,
+            "w1": RewardSettings.c2.feet_contacting_ground,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
 
     joint_vel = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "joint_vel",
-            "start_weight": RewardSettings.c1.joint_vel,
-            "end_weight": RewardSettings.c2.joint_vel,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "joint_vel",
+            "w0": RewardSettings.c1.joint_vel,
+            "w1": RewardSettings.c2.joint_vel,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
     action_rt = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
-            "reward_name": "action_rt",
-            "start_weight": RewardSettings.c1.action_rt,
-            "end_weight": RewardSettings.c2.action_rt,
-            "start_step": CurriculumSettings.c1c2.activation_step,
-            "end_step": CurriculumSettings.c1c2.end_step,
+            "term_name": "action_rt",
+            "w0": RewardSettings.c1.action_rt,
+            "w1": RewardSettings.c2.action_rt,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
         },
     )
 
