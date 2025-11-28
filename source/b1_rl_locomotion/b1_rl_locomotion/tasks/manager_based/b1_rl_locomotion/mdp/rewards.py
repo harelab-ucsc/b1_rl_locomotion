@@ -309,3 +309,15 @@ def threshold_contact_reward(
     # print("[DEBUG] Sparse threshold contact reward:", reward, reward.shape)
 
     return reward
+
+
+def flat_orientation_l2_norm(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Penalize non-flat base orientation using L2 norm.
+
+    This is computed by penalizing the xy-component norm of the projected gravity vector.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: RigidObject = env.scene[asset_cfg.name]
+    return torch.norm(asset.data.projected_gravity_b[:, :2], dim=1)

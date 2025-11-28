@@ -284,22 +284,23 @@ class RewardSettings:
 
     # constants
     class constant:
-        termination: float = -2.0
+        termination: float = -5.0
 
     # curriculum 1 settings (initial)
     class c1:
         # penalty / reward for laying down
-        joint_error: float = -0.1
-        joint_error_fine: float = 0.05
-        base_height: float = -0.1
-        base_height_fine: float = 0.05
-        base_lin_vel_z: float = -0.1
+        joint_error: float = -0.01
+        joint_error_fine: float = 0.01
+        base_height: float = -0.01
+        base_height_fine: float = 0.01
+        base_lin_vel_z: float = -0.01
 
         # balancing rewards
         base_lin_vel_xy: float = -0.5
-        base_flat_orientation: float = -1.5
+        base_flat_orientation: float = -5.0
         feet_air_time: float = -0.5
         feet_contacting_ground: float = -0.5
+        hip_centering: float = -0.01
 
         # smoothness rewards
         joint_vel: float = -1e-2
@@ -308,21 +309,21 @@ class RewardSettings:
     # curriculum 2 settings (after C1 -> C2)
     class c2(c1):
         # increase joint error and laying down rewards
-        joint_error: float = -0.1 * 5.0
-        joint_error_fine: float = 0.05 * 5.0
-        base_height: float = -0.1 * 3.0
-        base_height_fine: float = 0.05 * 3.0
-        base_lin_vel_z: float = -0.1 * 5.0
-
+        joint_error: float = -0.05 * 6.0
+        joint_error_fine: float = 0.01 * 10.0
+        base_height: float = -0.05 * 6.0
+        base_height_fine: float = 0.01 * 10.0
+        base_lin_vel_z: float = -0.05 * 3.0
         # increase balancing rewards slightly
         base_lin_vel_xy: float = -0.5 * 1.25
-        base_flat_orientation: float = -1.5 * 1.25
+        base_flat_orientation: float = -5.0 * 1.25
         feet_air_time: float = -0.5 * 1.25
         feet_contacting_ground: float = -0.5 * 1.25
+        hip_centering: float = 0.0  # turn off hip centering
 
         # increase smoothness rewards
         joint_vel: float = -1e-2 * 4.0
-        action_rt: float = -1e-2 * 4.0
+        action_rt: float = -1e-2 * 10.0
 
 
 @configclass
@@ -402,7 +403,7 @@ class RewardsCfg:
 
     # Track base orientation (CoM)
     base_flat_orientation = RewTerm(
-        func=mdp.flat_orientation_l2,
+        func=mdp.flat_orientation_l2_norm,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
@@ -426,6 +427,15 @@ class RewardsCfg:
             "threshold": 100.0,
         },  # at least 100N per foot
         weight=RewardSettings.c1.feet_contacting_ground,
+    )
+
+    # Slight penalty for hip centering (so it doesn't look like shit)
+    hip_centering = RewTerm(
+        func=mdp.joint_deviation_l1,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_joint"]),
+        },
+        weight=RewardSettings.c1.hip_centering,
     )
 
     # minimize feet contact forces at all times
@@ -469,8 +479,8 @@ class CurriculumSettings:
 
     # C1 -> C2 settings
     class c1c2:
-        activation_step: int = 15000
-        end_step: int = 20000
+        activation_step: int = 2000
+        end_step: int = 3000
 
 
 @configclass
@@ -572,6 +582,16 @@ class CurriculumCfg:
             "term_name": "feet_contacting_ground",
             "w0": RewardSettings.c1.feet_contacting_ground,
             "w1": RewardSettings.c2.feet_contacting_ground,
+            "t0": CurriculumSettings.c1c2.activation_step,
+            "t1": CurriculumSettings.c1c2.end_step,
+        },
+    )
+    hip_centering = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "hip_centering",
+            "w0": RewardSettings.c1.hip_centering,
+            "w1": RewardSettings.c2.hip_centering,
             "t0": CurriculumSettings.c1c2.activation_step,
             "t1": CurriculumSettings.c1c2.end_step,
         },
