@@ -298,8 +298,8 @@ class RewardSettings:
         # balancing rewards
         base_lin_vel_xy: float = -0.5
         base_flat_orientation: float = -5.0
-        feet_air_time: float = -0.5
-        feet_contacting_ground: float = -0.5
+        feet_air_time: float = -0.1
+        feet_contacting_ground: float = -0.2
         hip_centering: float = -0.01
 
         # smoothness rewards
@@ -317,8 +317,8 @@ class RewardSettings:
         # increase balancing rewards slightly
         base_lin_vel_xy: float = -0.5 * 1.25
         base_flat_orientation: float = -5.0 * 1.25
-        feet_air_time: float = -0.5 * 1.25
-        feet_contacting_ground: float = -0.5 * 1.25
+        feet_air_time: float = -0.1 * 5
+        feet_contacting_ground: float = -0.2 * 5
         hip_centering: float = 0.0  # turn off hip centering
 
         # increase smoothness rewards
