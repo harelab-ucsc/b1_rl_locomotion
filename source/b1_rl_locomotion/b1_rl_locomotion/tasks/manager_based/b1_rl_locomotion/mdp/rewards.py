@@ -144,7 +144,7 @@ def joint_pos_target_error_l2(
     joint_pos = robot.data.joint_pos[:, asset_cfg.joint_ids]
     diff = joint_pos - desired_pos
 
-    error_l2_squared = diff.square().sum(dim=1)  # squared L2 norm
+    error_l2_squared = diff.square().mean(dim=1)  # squared L2 norm
 
     if use_tanh:
         # per-joint absolute errors
@@ -154,7 +154,7 @@ def joint_pos_target_error_l2(
         per_joint_reward = (1.0 - torch.tanh(abs_diff / tanh_scale)) ** 2  # [N, J]
 
         # take min tanh reward over joints
-        error_l2_tanh = per_joint_reward.min(dim=1).values  # [N]
+        error_l2_tanh = per_joint_reward.mean(dim=1)  # [N]
         return error_l2_tanh
 
     return error_l2_squared

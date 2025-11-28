@@ -285,21 +285,22 @@ class RewardSettings:
     # constants
     class constant:
         termination: float = -5.0
+        alive_bonus: float = 1.0
 
     # curriculum 1 settings (initial)
     class c1:
-        # penalty / reward for laying down
-        joint_error: float = -0.01
-        joint_error_fine: float = 0.01
-        base_height: float = -0.01
-        base_height_fine: float = 0.01
+        # penalty / reward for laying down. Mostly turned off initially
+        joint_error: float = 0.0
+        joint_error_fine: float = 0.0
+        base_height: float = 0.0
+        base_height_fine: float = 0.0
         base_lin_vel_z: float = -0.01
 
         # balancing rewards
-        base_lin_vel_xy: float = -0.5
-        base_flat_orientation: float = -5.0
-        feet_air_time: float = -0.1
-        feet_contacting_ground: float = -0.2
+        base_lin_vel_xy: float = -0.1
+        base_flat_orientation: float = -1.0
+        feet_air_time: float = 0.0  # turn the feet air time reward off initially
+        feet_contacting_ground: float = 0.0
         hip_centering: float = -0.01
 
         # smoothness rewards
@@ -307,23 +308,26 @@ class RewardSettings:
         action_rt: float = -1e-2
 
     # curriculum 2 settings (after C1 -> C2)
-    class c2(c1):
+    class c2:
         # increase joint error and laying down rewards
-        joint_error: float = -0.05 * 6.0
-        joint_error_fine: float = 0.01 * 10.0
-        base_height: float = -0.05 * 6.0
-        base_height_fine: float = 0.01 * 10.0
-        base_lin_vel_z: float = -0.05 * 3.0
+        joint_error: float = -0.3
+        joint_error_fine: float = 0.5
+        base_height: float = -0.3
+        base_height_fine: float = 0.1
+        base_lin_vel_z: float = -0.15
         # increase balancing rewards slightly
-        base_lin_vel_xy: float = -0.5 * 1.25
-        base_flat_orientation: float = -5.0 * 1.25
-        feet_air_time: float = -0.1 * 5
-        feet_contacting_ground: float = -0.2 * 5
+        base_lin_vel_xy: float = -0.5
+        base_flat_orientation: float = -1.25
         hip_centering: float = 0.0  # turn off hip centering
 
         # increase smoothness rewards
         joint_vel: float = -1e-2 * 4.0
         action_rt: float = -1e-2 * 10.0
+
+    # longer curriculum 2 term, meant for more strict penalties
+    class c2_1:
+        feet_air_time: float = -0.1
+        feet_contacting_ground: float = -0.2
 
 
 @configclass
@@ -468,6 +472,13 @@ class RewardsCfg:
 
     ###########################################################
 
+    # Alive bonus
+    alive_bonus = RewTerm(
+        func=mdp.is_alive,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+        weight=RewardSettings.constant.alive_bonus,
+    )
+
     # Failure penalty
     terminating = RewTerm(
         func=mdp.is_terminated, weight=RewardSettings.constant.termination
@@ -477,10 +488,20 @@ class RewardsCfg:
 class CurriculumSettings:
     """Settings for curriculums."""
 
-    # C1 -> C2 settings
-    class c1c2:
-        activation_step: int = 2000
-        end_step: int = 3000
+    ###########################################################
+    # C1 -> C2: Keep balancing rewards roughly the same,
+    # but make laying down rewards more important.
+    #
+    # Activates: 3k steps
+    # Activation Duration: 2k steps
+    ###########################################################
+
+    class c2:
+        activation_step: int = 3000
+        end_step: int = 5000
+
+    class c2_1(c2):
+        end_step: int = 8000
 
 
 @configclass
@@ -488,11 +509,7 @@ class CurriculumCfg:
     """Curriculum settings for the MDP."""
 
     ###########################################################
-    # C1 -> C2: Keep balancing rewards roughly the same,
-    # but make laying down rewards more important.
-    #
-    # Activates: 15k steps
-    # Activation Duration: 5k steps
+    # C1 -> C2 settings
     ###########################################################
 
     joint_error = CurrTerm(
@@ -501,8 +518,8 @@ class CurriculumCfg:
             "term_name": "joint_error",
             "w0": RewardSettings.c1.joint_error,
             "w1": RewardSettings.c2.joint_error,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
     joint_error_fine = CurrTerm(
@@ -511,8 +528,8 @@ class CurriculumCfg:
             "term_name": "joint_error_fine",
             "w0": RewardSettings.c1.joint_error_fine,
             "w1": RewardSettings.c2.joint_error_fine,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
     base_height = CurrTerm(
@@ -521,8 +538,8 @@ class CurriculumCfg:
             "term_name": "base_height",
             "w0": RewardSettings.c1.base_height,
             "w1": RewardSettings.c2.base_height,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
     base_height_fine = CurrTerm(
@@ -531,8 +548,8 @@ class CurriculumCfg:
             "term_name": "base_height_fine",
             "w0": RewardSettings.c1.base_height_fine,
             "w1": RewardSettings.c2.base_height_fine,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
     base_lin_vel_z = CurrTerm(
@@ -541,8 +558,8 @@ class CurriculumCfg:
             "term_name": "base_lin_vel_z",
             "w0": RewardSettings.c1.base_lin_vel_z,
             "w1": RewardSettings.c2.base_lin_vel_z,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
 
@@ -552,8 +569,8 @@ class CurriculumCfg:
             "term_name": "base_lin_vel_xy",
             "w0": RewardSettings.c1.base_lin_vel_xy,
             "w1": RewardSettings.c2.base_lin_vel_xy,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
     base_flat_orientation = CurrTerm(
@@ -562,8 +579,8 @@ class CurriculumCfg:
             "term_name": "base_flat_orientation",
             "w0": RewardSettings.c1.base_flat_orientation,
             "w1": RewardSettings.c2.base_flat_orientation,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
     feet_air_time = CurrTerm(
@@ -571,9 +588,9 @@ class CurriculumCfg:
         params={
             "term_name": "feet_air_time",
             "w0": RewardSettings.c1.feet_air_time,
-            "w1": RewardSettings.c2.feet_air_time,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "w1": RewardSettings.c2_1.feet_air_time,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2_1.end_step,
         },
     )
     feet_contacting_ground = CurrTerm(
@@ -581,9 +598,9 @@ class CurriculumCfg:
         params={
             "term_name": "feet_contacting_ground",
             "w0": RewardSettings.c1.feet_contacting_ground,
-            "w1": RewardSettings.c2.feet_contacting_ground,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "w1": RewardSettings.c2_1.feet_contacting_ground,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2_1.end_step,
         },
     )
     hip_centering = CurrTerm(
@@ -592,8 +609,8 @@ class CurriculumCfg:
             "term_name": "hip_centering",
             "w0": RewardSettings.c1.hip_centering,
             "w1": RewardSettings.c2.hip_centering,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
 
@@ -603,8 +620,8 @@ class CurriculumCfg:
             "term_name": "joint_vel",
             "w0": RewardSettings.c1.joint_vel,
             "w1": RewardSettings.c2.joint_vel,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
     action_rt = CurrTerm(
@@ -613,8 +630,8 @@ class CurriculumCfg:
             "term_name": "action_rt",
             "w0": RewardSettings.c1.action_rt,
             "w1": RewardSettings.c2.action_rt,
-            "t0": CurriculumSettings.c1c2.activation_step,
-            "t1": CurriculumSettings.c1c2.end_step,
+            "t0": CurriculumSettings.c2.activation_step,
+            "t1": CurriculumSettings.c2.end_step,
         },
     )
 
