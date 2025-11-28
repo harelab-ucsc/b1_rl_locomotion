@@ -41,14 +41,14 @@ memory:
 agent:
   class: PPO
   rollouts: 32
-  learning_epochs: 20
-  mini_batches: 5
+  learning_epochs: 16
+  mini_batches: 4
   discount_factor: 0.95
   lambda: 0.95
   learning_rate: 3.0e-03
   learning_rate_scheduler: KLAdaptiveLR
   learning_rate_scheduler_kwargs:
-    kl_threshold: 0.015 # 0.01, 0.008
+    kl_threshold: 0.012 # 0.01, 0.008
   state_preprocessor: RunningStandardScaler
   state_preprocessor_kwargs: null
   value_preprocessor: RunningStandardScaler
@@ -67,7 +67,7 @@ agent:
   # logging and checkpoint
   experiment:
     directory: "stand_to_sit"
-    experiment_name: "run_8"
+    experiment_name: "run_10"
     write_interval: auto
     checkpoint_interval: auto
     wandb: True

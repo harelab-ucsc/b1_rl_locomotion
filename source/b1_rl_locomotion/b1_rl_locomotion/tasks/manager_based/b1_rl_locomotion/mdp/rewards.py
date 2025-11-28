@@ -153,8 +153,8 @@ def joint_pos_target_error_l2(
         # per-joint rewards from tanh shaping
         per_joint_reward = (1.0 - torch.tanh(abs_diff / tanh_scale)) ** 2  # [N, J]
 
-        # aggregate over joints to a per-env scalar
-        error_l2_tanh = per_joint_reward.mean(dim=1)  # [N]
+        # take min tanh reward over joints
+        error_l2_tanh = per_joint_reward.min(dim=1).values  # [N]
         return error_l2_tanh
 
     return error_l2_squared
@@ -163,15 +163,28 @@ def joint_pos_target_error_l2(
 def body_lin_vel_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    x: bool = True,
+    y: bool = True,
+    z: bool = True,
 ) -> torch.Tensor:
-    """Penalize body linear velocity L2 norm (don't move). Reurns a positive value (the norm)."""
+    """
+    Penalize body linear velocity L2 norm (don't move).
+    Can choose which axes to include.
+    Returns a positive value (the norm).
+    """
     robot: RigidObject = env.scene[asset_cfg.name]
 
     # Compute L2 norm of linear velocity
-    lin_vel = robot.data.root_state_w[:, 7:10]  # envs x 3
-    lin_vel_l2 = torch.norm(lin_vel, dim=1)
+    indices = []
+    if x:
+        indices.append(7)
+    if y:
+        indices.append(8)
+    if z:
+        indices.append(9)
 
-    # print("[DEBUG] Body linear velocity L2 norm:", lin_vel_l2, lin_vel_l2.shape)
+    lin_vel = robot.data.root_state_w[:, indices]  # envs x 2 or 3
+    lin_vel_l2 = torch.norm(lin_vel, dim=1)
 
     return lin_vel_l2
 
