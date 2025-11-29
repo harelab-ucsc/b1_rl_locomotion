@@ -311,7 +311,7 @@ def threshold_contact_reward(
     return reward
 
 
-def flat_orientation_l2_norm(
+def flat_orientation_l2(
     env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
     """Penalize non-flat base orientation using L2 norm.
