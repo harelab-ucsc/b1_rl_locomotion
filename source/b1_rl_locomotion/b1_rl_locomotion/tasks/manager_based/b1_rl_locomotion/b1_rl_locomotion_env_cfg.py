@@ -208,9 +208,9 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.0, 0.5),
-                "roll": (-0.2, 0.2),
-                "pitch": (-0.2, 0.2),
+                "z": (-0.1, 0.2),
+                "roll": (-0.4, 0.4),
+                "pitch": (-0.4, 0.4),
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {
@@ -298,8 +298,8 @@ class RewardSettings:
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
-        base_flat_orientation: float = -1.0
-        feet_air_time: float = -0.05
+        base_flat_orientation: float = -2.0
+        feet_air_time: float = -0.15
         feet_contacting_ground: float = -0.05
         hip_centering: float = -0.1
 
@@ -311,15 +311,15 @@ class RewardSettings:
     # curriculum 2 settings (after C1 -> C2)
     class c2:
         # increase joint error and laying down rewards
-        joint_error: float = -0.5
-        joint_error_fine: float = 1.0
-        base_height: float = -0.3
-        base_height_fine: float = 0.5
+        joint_error: float = -0.3
+        joint_error_fine: float = 0.5
+        base_height: float = -0.2
+        base_height_fine: float = 0.35
         base_lin_vel_z: float = -0.1
 
         # balancing rewards
         base_lin_vel_xy: float = -0.5
-        base_flat_orientation: float = -2.0
+        base_flat_orientation: float = -2.5
         feet_air_time: float = -0.3
         feet_contacting_ground: float = -0.3
 
@@ -327,8 +327,8 @@ class RewardSettings:
 
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
-        joint_vel: float = -5e-2
-        action_rt: float = -0.15
+        joint_vel: float = -5e-4
+        action_rt: float = -0.12
 
         soft_landing: float = 0.1
 
@@ -504,7 +504,7 @@ class CurriculumSettings:
 
     class c2_1(c2):
         activation_step: int = 1000
-        end_step: int = 5000
+        end_step: int = 2000
 
 
 @configclass
