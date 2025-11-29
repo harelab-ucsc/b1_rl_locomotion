@@ -284,7 +284,7 @@ class RewardSettings:
 
     # constants
     class constant:
-        termination: float = -20.0
+        termination: float = -50.0
         # alive_bonus: float = 0.0
 
     # curriculum 1 settings (initial)
@@ -499,12 +499,12 @@ class CurriculumSettings:
     ###########################################################
 
     class c2:
-        activation_step: int = 0
-        end_step: int = 1000
+        activation_step: int = 500
+        end_step: int = 1500
 
     class c2_1(c2):
         activation_step: int = 1000
-        end_step: int = 2000
+        end_step: int = 2500
 
 
 @configclass
