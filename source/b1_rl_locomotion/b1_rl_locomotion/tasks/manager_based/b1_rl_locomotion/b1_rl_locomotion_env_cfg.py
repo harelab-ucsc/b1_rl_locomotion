@@ -208,7 +208,7 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (-0.1, 0.2),
+                "z": (-0.1, 0.25),
                 "roll": (-0.4, 0.4),
                 "pitch": (-0.4, 0.4),
                 "yaw": (0.0, 0.0),
@@ -285,7 +285,7 @@ class RewardSettings:
     # constants
     class constant:
         termination: float = -20.0
-        alive_bonus: float = 0.0
+        # alive_bonus: float = 0.0
 
     # curriculum 1 settings (initial)
     class c1:
@@ -299,38 +299,38 @@ class RewardSettings:
         # balancing rewards
         base_lin_vel_xy: float = -0.1
         base_flat_orientation: float = -2.0
-        feet_air_time: float = -0.15
+        feet_air_time: float = -0.35
         feet_contacting_ground: float = -0.05
-        hip_centering: float = -0.1
+        # hip_centering: float = -0.1
 
         # smoothness rewards
-        joint_vel: float = -1e-6
+        joint_vel: float = -1e-7
         action_rt: float = -1e-6
-        soft_landing: float = 1e-3
+        # soft_landing: float = 1e-3
 
     # curriculum 2 settings (after C1 -> C2)
     class c2:
         # increase joint error and laying down rewards
         joint_error: float = -0.3
         joint_error_fine: float = 0.5
-        base_height: float = -0.2
-        base_height_fine: float = 0.35
+        base_height: float = -0.3
+        base_height_fine: float = 0.5
         base_lin_vel_z: float = -0.1
 
         # balancing rewards
         base_lin_vel_xy: float = -0.5
         base_flat_orientation: float = -2.5
-        feet_air_time: float = -0.3
+        feet_air_time: float = -1.5
         feet_contacting_ground: float = -0.3
 
-        hip_centering: float = 0.0  # turn off hip centering
+        # hip_centering: float = 0.0  # turn off hip centering
 
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
         joint_vel: float = -5e-4
         action_rt: float = -0.12
 
-        soft_landing: float = 0.1
+        # soft_landing: float = 0.1
 
 
 @configclass
@@ -445,17 +445,17 @@ class RewardsCfg:
     #     weight=RewardSettings.c1.hip_centering,
     # )
 
-    # minimize feet contact forces at all times
-    soft_landing = RewTerm(
-        func=mdp.threshold_contact_reward,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
-            "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
-            "max_thresholds_offset": 150.0,  # 150 N above trigger is too much, starts penalizing
-            "trigger_threshold": 120.0,  # minimum force to start rewarding/penalizing
-        },
-        weight=RewardSettings.c1.soft_landing,
-    )
+    # # minimize feet contact forces at all times
+    # soft_landing = RewTerm(
+    #     func=mdp.threshold_contact_reward,
+    #     params={
+    #         "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
+    #         "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
+    #         "max_thresholds_offset": 150.0,  # 150 N above trigger is too much, starts penalizing
+    #         "trigger_threshold": 120.0,  # minimum force to start rewarding/penalizing
+    #     },
+    #     weight=RewardSettings.c1.soft_landing,
+    # )
 
     ###########################################################
     # REWARDS FOR SMOOTH MOTION
@@ -475,11 +475,11 @@ class RewardsCfg:
 
     ###########################################################
 
-    # Alive bonus
-    alive_bonus = RewTerm(
-        func=mdp.is_alive,
-        weight=RewardSettings.constant.alive_bonus,
-    )
+    # # Alive bonus
+    # alive_bonus = RewTerm(
+    #     func=mdp.is_alive,
+    #     weight=RewardSettings.constant.alive_bonus,
+    # )
 
     # Failure penalty
     terminating = RewTerm(
@@ -616,16 +616,16 @@ class CurriculumCfg:
     #         "t1": CurriculumSettings.c2.end_step,
     #     },
     # )
-    soft_landing = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "soft_landing",
-            "w0": RewardSettings.c1.soft_landing,
-            "w1": RewardSettings.c2_1.soft_landing,
-            "t0": CurriculumSettings.c2_1.activation_step,
-            "t1": CurriculumSettings.c2_1.end_step,
-        },
-    )
+    # soft_landing = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "soft_landing",
+    #         "w0": RewardSettings.c1.soft_landing,
+    #         "w1": RewardSettings.c2_1.soft_landing,
+    #         "t0": CurriculumSettings.c2_1.activation_step,
+    #         "t1": CurriculumSettings.c2_1.end_step,
+    #     },
+    # )
 
     joint_vel = CurrTerm(
         func=mdp.lerp_reward_weight,
@@ -660,7 +660,7 @@ class TerminationsCfg:
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 700,
+            "threshold": 800,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
