@@ -208,9 +208,9 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (-0.1, 0.25),
-                "roll": (-0.4, 0.4),
-                "pitch": (-0.4, 0.4),
+                "z": (-0.05, 0.1),
+                "roll": (-0.1, 0.1),
+                "pitch": (-0.1, 0.1),
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {
@@ -290,10 +290,10 @@ class RewardSettings:
     # curriculum 1 settings (initial)
     class c1:
         # penalty / reward for laying down. Mostly turned off initially
-        joint_error: float = -5e-2
-        joint_error_fine: float = 5e-2
-        base_height: float = -0.1
-        base_height_fine: float = -0.1
+        joint_error: float = -5e-4
+        joint_error_fine: float = 5e-4
+        base_height: float = -5e-4
+        base_height_fine: float = 5e-4
         base_lin_vel_z: float = -1e-2
 
         # balancing rewards
@@ -315,13 +315,13 @@ class RewardSettings:
         joint_error_fine: float = 0.5
         base_height: float = -0.3
         base_height_fine: float = 0.5
-        base_lin_vel_z: float = -0.1
+        base_lin_vel_z: float = -0.15
 
         # balancing rewards
         base_lin_vel_xy: float = -0.5
-        base_flat_orientation: float = -2.5
-        feet_air_time: float = -1.5
-        feet_contacting_ground: float = -0.3
+        base_flat_orientation: float = -3.0
+        feet_air_time: float = -2.0
+        feet_contacting_ground: float = -0.7
 
         # hip_centering: float = 0.0  # turn off hip centering
 
@@ -699,9 +699,11 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 5
+        self.episode_length_s = 3
         # viewer settings
-        self.viewer.eye = (8.0, 0.0, 2.0)
+        self.viewer.eye = (4.0, 0.0, 1.0)
+        self.viewer.origin_type = "asset_root"
+        self.viewer.asset_name = "robot"
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
