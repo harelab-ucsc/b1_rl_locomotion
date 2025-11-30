@@ -161,19 +161,26 @@ class ObservationsCfg:
             noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
 
+        # contact_feet = ObsTerm(
+        #     func=mdp.contact_sensor_force,
+        #     params={"sensor_cfg": SceneEntityCfg("contact_forces_feet")},
+        #     noise=AdditiveUniformNoiseCfg(n_min=-0.1, n_max=0.1),
+        # )
+
         # relevant IMU data
         imu_orientation = ObsTerm(
             func=mdp.imu_orientation,
             params={"asset_cfg": SceneEntityCfg("imu_sensor")},
             noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
+        imu_lin_acc = ObsTerm(
+            func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+        )
+        imu_ang_vel = ObsTerm(
+            func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+        )
 
-        # imu_lin_acc = ObsTerm(
-        #     func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
-        # )
-        # imu_ang_vel = ObsTerm(
-        #     func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
-        # )
+        last_action = ObsTerm(func=mdp.last_action)
 
         # command
         # velocity_cmd = ObsTerm(
@@ -211,9 +218,9 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (-0.05, 0.05),
-                "roll": (-0.1, 0.1),
-                "pitch": (-0.1, 0.1),
+                "z": (-0.05, 0.35),
+                "roll": (-0.15, 0.15),
+                "pitch": (-0.15, 0.15),
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {
@@ -293,17 +300,17 @@ class RewardSettings:
     # curriculum 1 settings (initial)
     class c1:
         # penalty / reward for laying down. Mostly turned off initially
-        joint_error: float = -5e-4
-        joint_error_fine: float = 5e-4
-        base_height: float = -5e-4
-        base_height_fine: float = 5e-4
-        base_lin_vel_z: float = -1e-2
+        joint_error: float = -0.3  # -5e-4
+        joint_error_fine: float = 0.5  # 5e-4
+        base_height: float = -0.3  # -5e-4
+        base_height_fine: float = 0.5  # 5e-4
+        base_lin_vel_z: float = -0.15  # -1e-2
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
         base_flat_orientation: float = -2.0
-        feet_air_time: float = -0.35
-        feet_contacting_ground: float = -0.05
+        feet_air_time: float = -0.8  # -0.35
+        feet_contacting_ground: float = -0.7  # -0.05
         # hip_centering: float = -0.1
 
         # smoothness rewards
@@ -331,7 +338,7 @@ class RewardSettings:
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
         joint_vel: float = -5e-4
-        action_rt: float = -0.12
+        action_rt: float = -0.15
 
         # soft_landing: float = 0.1
 
@@ -518,97 +525,98 @@ class CurriculumCfg:
     # C1 -> C2 settings
     ###########################################################
 
-    joint_error = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "joint_error",
-            "w0": RewardSettings.c1.joint_error,
-            "w1": RewardSettings.c2.joint_error,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
-    joint_error_fine = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "joint_error_fine",
-            "w0": RewardSettings.c1.joint_error_fine,
-            "w1": RewardSettings.c2.joint_error_fine,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
-    base_height = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "base_height",
-            "w0": RewardSettings.c1.base_height,
-            "w1": RewardSettings.c2.base_height,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
-    base_height_fine = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "base_height_fine",
-            "w0": RewardSettings.c1.base_height_fine,
-            "w1": RewardSettings.c2.base_height_fine,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
-    base_lin_vel_z = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "base_lin_vel_z",
-            "w0": RewardSettings.c1.base_lin_vel_z,
-            "w1": RewardSettings.c2.base_lin_vel_z,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
+    # joint_error = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "joint_error",
+    #         "w0": RewardSettings.c1.joint_error,
+    #         "w1": RewardSettings.c2.joint_error,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
+    # joint_error_fine = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "joint_error_fine",
+    #         "w0": RewardSettings.c1.joint_error_fine,
+    #         "w1": RewardSettings.c2.joint_error_fine,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
+    # base_height = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "base_height",
+    #         "w0": RewardSettings.c1.base_height,
+    #         "w1": RewardSettings.c2.base_height,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
+    # base_height_fine = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "base_height_fine",
+    #         "w0": RewardSettings.c1.base_height_fine,
+    #         "w1": RewardSettings.c2.base_height_fine,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
+    # base_lin_vel_z = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "base_lin_vel_z",
+    #         "w0": RewardSettings.c1.base_lin_vel_z,
+    #         "w1": RewardSettings.c2.base_lin_vel_z,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
 
-    base_lin_vel_xy = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "base_lin_vel_xy",
-            "w0": RewardSettings.c1.base_lin_vel_xy,
-            "w1": RewardSettings.c2.base_lin_vel_xy,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
-    base_flat_orientation = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "base_flat_orientation",
-            "w0": RewardSettings.c1.base_flat_orientation,
-            "w1": RewardSettings.c2.base_flat_orientation,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
-    feet_air_time = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "feet_air_time",
-            "w0": RewardSettings.c1.feet_air_time,
-            "w1": RewardSettings.c2.feet_air_time,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
-    feet_contacting_ground = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "feet_contacting_ground",
-            "w0": RewardSettings.c1.feet_contacting_ground,
-            "w1": RewardSettings.c2.feet_contacting_ground,
-            "t0": CurriculumSettings.c2.activation_step,
-            "t1": CurriculumSettings.c2.end_step,
-        },
-    )
+    # base_lin_vel_xy = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "base_lin_vel_xy",
+    #         "w0": RewardSettings.c1.base_lin_vel_xy,
+    #         "w1": RewardSettings.c2.base_lin_vel_xy,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
+    # base_flat_orientation = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "base_flat_orientation",
+    #         "w0": RewardSettings.c1.base_flat_orientation,
+    #         "w1": RewardSettings.c2.base_flat_orientation,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
+    # feet_air_time = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "feet_air_time",
+    #         "w0": RewardSettings.c1.feet_air_time,
+    #         "w1": RewardSettings.c2.feet_air_time,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
+    # feet_contacting_ground = CurrTerm(
+    #     func=mdp.lerp_reward_weight,
+    #     params={
+    #         "term_name": "feet_contacting_ground",
+    #         "w0": RewardSettings.c1.feet_contacting_ground,
+    #         "w1": RewardSettings.c2.feet_contacting_ground,
+    #         "t0": CurriculumSettings.c2.activation_step,
+    #         "t1": CurriculumSettings.c2.end_step,
+    #     },
+    # )
+
     # hip_centering = CurrTerm(
     #     func=mdp.lerp_reward_weight,
     #     params={
@@ -715,7 +723,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 3
+        self.episode_length_s = 5
         # viewer settings
         self.viewer.eye = (4.0, 0.0, 1.0)
         self.viewer.origin_type = "asset_root"
