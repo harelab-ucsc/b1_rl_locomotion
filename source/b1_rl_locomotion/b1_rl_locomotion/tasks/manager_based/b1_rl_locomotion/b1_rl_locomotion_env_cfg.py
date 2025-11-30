@@ -163,14 +163,17 @@ class ObservationsCfg:
 
         # relevant IMU data
         imu_orientation = ObsTerm(
-            func=mdp.imu_orientation, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+            func=mdp.imu_orientation,
+            params={"asset_cfg": SceneEntityCfg("imu_sensor")},
+            noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
-        imu_lin_acc = ObsTerm(
-            func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
-        )
-        imu_ang_vel = ObsTerm(
-            func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
-        )
+
+        # imu_lin_acc = ObsTerm(
+        #     func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+        # )
+        # imu_ang_vel = ObsTerm(
+        #     func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+        # )
 
         # command
         # velocity_cmd = ObsTerm(
@@ -208,7 +211,7 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (-0.05, 0.1),
+                "z": (-0.05, 0.05),
                 "roll": (-0.1, 0.1),
                 "pitch": (-0.1, 0.1),
                 "yaw": (0.0, 0.0),
@@ -315,12 +318,12 @@ class RewardSettings:
         joint_error_fine: float = 0.5
         base_height: float = -0.3
         base_height_fine: float = 0.5
-        base_lin_vel_z: float = -0.15
+        base_lin_vel_z: float = -0.08
 
         # balancing rewards
-        base_lin_vel_xy: float = -0.5
+        base_lin_vel_xy: float = -0.12
         base_flat_orientation: float = -3.0
-        feet_air_time: float = -2.0
+        feet_air_time: float = -0.8
         feet_contacting_ground: float = -0.7
 
         # hip_centering: float = 0.0  # turn off hip centering
@@ -656,7 +659,7 @@ class TerminationsCfg:
     # (1) Time out
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
-    # # (2) Base touches the ground
+    # (2) Base touches the ground
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
@@ -673,11 +676,24 @@ class TerminationsCfg:
     )
 
 
+class TerminationCfg_PLAY(TerminationsCfg):
+    """Termination terms for the MDP."""
+
+    # (1) Time out
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+
+    falls_over = DoneTerm(
+        func=mdp.illegal_contact,
+        params={
+            "threshold": 800,
+            "sensor_cfg": SceneEntityCfg("contact_forces_body"),
+        },
+    )
+
+
 ##
 # Environment configuration
 ##
-
-
 @configclass
 class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
@@ -713,6 +729,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
 @configclass
 class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
     events: EventCfg = EventCfg_PLAY()
+    terminations: TerminationCfg_PLAY = TerminationCfg_PLAY()
 
     def __post_init__(self) -> None:
         super().__post_init__()
