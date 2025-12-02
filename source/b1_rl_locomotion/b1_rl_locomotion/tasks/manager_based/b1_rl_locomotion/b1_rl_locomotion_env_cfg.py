@@ -174,10 +174,14 @@ class ObservationsCfg:
             noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
         imu_lin_acc = ObsTerm(
-            func=mdp.imu_lin_acc, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+            func=mdp.imu_lin_acc,
+            params={"asset_cfg": SceneEntityCfg("imu_sensor")},
+            noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
         imu_ang_vel = ObsTerm(
-            func=mdp.imu_ang_vel, params={"asset_cfg": SceneEntityCfg("imu_sensor")}
+            func=mdp.imu_ang_vel,
+            params={"asset_cfg": SceneEntityCfg("imu_sensor")},
+            noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
 
         last_action = ObsTerm(func=mdp.last_action)
@@ -218,15 +222,15 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (-0.05, 0.35),
-                "roll": (-0.15, 0.15),
-                "pitch": (-0.15, 0.15),
+                "z": (0.0, 0.1),
+                "roll": (-0.05, 0.05),
+                "pitch": (-0.05, 0.05),
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
+                "z": (-0.5, 0.5),
                 "roll": (-0.1, 0.1),
                 "pitch": (-0.1, 0.1),
                 "yaw": (-0.1, 0.1),
@@ -300,11 +304,11 @@ class RewardSettings:
     # curriculum 1 settings (initial)
     class c1:
         # penalty / reward for laying down. Mostly turned off initially
-        joint_error: float = -0.3  # -5e-4
-        joint_error_fine: float = 0.5  # 5e-4
+        joint_error: float = -0.2  # -5e-4
+        joint_error_fine: float = 0.4  # 5e-4
         base_height: float = -0.3  # -5e-4
         base_height_fine: float = 0.5  # 5e-4
-        base_lin_vel_z: float = -0.15  # -1e-2
+        base_lin_vel_z: float = -0.2  # -1e-2
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
@@ -338,7 +342,7 @@ class RewardSettings:
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
         joint_vel: float = -5e-4
-        action_rt: float = -0.15
+        action_rt: float = -0.2
 
         # soft_landing: float = 0.1
 
@@ -513,8 +517,8 @@ class CurriculumSettings:
         end_step: int = 1500
 
     class c2_1(c2):
-        activation_step: int = 1000
-        end_step: int = 2500
+        activation_step: int = 0
+        end_step: int = 1500
 
 
 @configclass

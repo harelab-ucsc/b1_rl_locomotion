@@ -43,7 +43,7 @@ agent:
   rollouts: 32
   learning_epochs: 16
   mini_batches: 4
-  discount_factor: 0.98
+  discount_factor: 0.9
   lambda: 0.95
   learning_rate: 3.0e-03
   learning_rate_scheduler: KLAdaptiveLR
@@ -67,7 +67,7 @@ agent:
   # logging and checkpoint
   experiment:
     directory: "stand_to_sit"
-    experiment_name: "run_161"
+    experiment_name: "run_17"
     write_interval: auto
     checkpoint_interval: auto
     wandb: True
