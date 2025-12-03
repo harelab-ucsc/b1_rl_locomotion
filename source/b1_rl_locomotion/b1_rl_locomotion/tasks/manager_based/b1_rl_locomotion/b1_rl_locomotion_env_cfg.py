@@ -298,7 +298,7 @@ class RewardSettings:
 
     # constants
     class constant:
-        termination: float = -10.0
+        termination: float = -5.0
         # alive_bonus: float = 0.0
 
     # curriculum 1 settings (initial)
@@ -308,14 +308,15 @@ class RewardSettings:
         joint_error_fine: float = 0.4  # 5e-4
         base_height: float = -0.9  # -5e-4
         base_height_fine: float = 0.5  # 5e-4
-        base_lin_vel_z: float = -0.2  # -1e-2
+        base_lin_vel_z: float = -0.12  # -1e-2
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
         base_flat_orientation: float = -2.0
         feet_air_time: float = -0.8  # -0.35
         feet_contacting_ground: float = -0.7  # -0.05
-        soft_body_land: float = 0.1
+        soft_body_land: float = 0.05
+        soft_feet_land: float = 0.1
         # hip_centering: float = -0.1
 
         # smoothness rewards
@@ -460,8 +461,8 @@ class RewardsCfg:
     #     weight=RewardSettings.c1.hip_centering,
     # )
 
-    # minimize feet contact forces at all times
-    soft_landing = RewTerm(
+    # minimize contact forces
+    soft_body_landing = RewTerm(
         func=mdp.threshold_contact_reward,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
@@ -470,6 +471,16 @@ class RewardsCfg:
             "trigger_threshold": 700.0,  # minimum force to start rewarding/penalizing
         },
         weight=RewardSettings.c1.soft_body_land,
+    )
+    soft_feet_landing = RewTerm(
+        func=mdp.threshold_contact_reward,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
+            "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
+            "max_thresholds_offset": 300.0,  # 300 N above trigger is too much, starts penalizing
+            "trigger_threshold": 1.0,  # minimum force to start rewarding/penalizing
+        },
+        weight=RewardSettings.c1.soft_feet_land,
     )
 
     ###########################################################
@@ -676,32 +687,41 @@ class TerminationsCfg:
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 800,
+            "threshold": 2000,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
-    bad_orientation = DoneTerm(
-        func=mdp.bad_orientation,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
-            "limit_angle": math.radians(120.0),
-        },
-    )
+    # bad_orientation = DoneTerm(
+    #     func=mdp.bad_orientation,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #         "limit_angle": math.radians(120.0),
+    #     },
+    # )
 
 
-class TerminationCfg_PLAY(TerminationsCfg):
+@configclass
+class TerminationsCfg_PLAY:
     """Termination terms for the MDP."""
 
     # (1) Time out
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
+    # (2) Base touches the ground
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 1000,
+            "threshold": 2000,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
+    # bad_orientation = DoneTerm(
+    #     func=mdp.bad_orientation,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+    #         "limit_angle": math.radians(120.0),
+    #     },
+    # )
 
 
 ##
@@ -733,6 +753,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         self.viewer.eye = (4.0, 0.0, 1.0)
         self.viewer.origin_type = "asset_root"
         self.viewer.asset_name = "robot"
+        self.viewer.env_index = 42
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
@@ -742,12 +763,14 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
 @configclass
 class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
     events: EventCfg = EventCfg_PLAY()
-    terminations: TerminationCfg_PLAY = TerminationCfg_PLAY()
+    terminations: TerminationsCfg_PLAY = TerminationsCfg_PLAY()
 
     def __post_init__(self) -> None:
         super().__post_init__()
 
         """Post initialization."""
+        self.viewer.env_index = 0
+
         # general settings
         self.scene.num_envs = 5
         # disable noise
