@@ -230,7 +230,7 @@ class EventCfg:
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (-1, 1),
+                "z": (-2, 2),
                 "roll": (-0.1, 0.1),
                 "pitch": (-0.1, 0.1),
                 "yaw": (-0.1, 0.1),
@@ -298,7 +298,7 @@ class RewardSettings:
 
     # constants
     class constant:
-        termination: float = -50.0
+        termination: float = -10.0
         # alive_bonus: float = 0.0
 
     # curriculum 1 settings (initial)
@@ -315,6 +315,7 @@ class RewardSettings:
         base_flat_orientation: float = -2.0
         feet_air_time: float = -0.8  # -0.35
         feet_contacting_ground: float = -0.7  # -0.05
+        soft_body_land: float = 0.1
         # hip_centering: float = -0.1
 
         # smoothness rewards
@@ -459,17 +460,17 @@ class RewardsCfg:
     #     weight=RewardSettings.c1.hip_centering,
     # )
 
-    # # minimize feet contact forces at all times
-    # soft_landing = RewTerm(
-    #     func=mdp.threshold_contact_reward,
-    #     params={
-    #         "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
-    #         "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
-    #         "max_thresholds_offset": 150.0,  # 150 N above trigger is too much, starts penalizing
-    #         "trigger_threshold": 120.0,  # minimum force to start rewarding/penalizing
-    #     },
-    #     weight=RewardSettings.c1.soft_landing,
-    # )
+    # minimize feet contact forces at all times
+    soft_landing = RewTerm(
+        func=mdp.threshold_contact_reward,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces_body"),
+            "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
+            "max_thresholds_offset": 200.0,  # 500 N above trigger is too much, starts penalizing
+            "trigger_threshold": 700.0,  # minimum force to start rewarding/penalizing
+        },
+        weight=RewardSettings.c1.soft_body_land,
+    )
 
     ###########################################################
     # REWARDS FOR SMOOTH MOTION
@@ -697,7 +698,7 @@ class TerminationCfg_PLAY(TerminationsCfg):
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 800,
+            "threshold": 1000,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
