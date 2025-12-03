@@ -222,15 +222,15 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.0, 0.1),
-                "roll": (-0.05, 0.05),
-                "pitch": (-0.05, 0.05),
+                "z": (0.0, 0.3),
+                "roll": (-0.15, 0.15),
+                "pitch": (-0.15, 0.15),
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (-0.5, 0.5),
+                "z": (-1, 1),
                 "roll": (-0.1, 0.1),
                 "pitch": (-0.1, 0.1),
                 "yaw": (-0.1, 0.1),
@@ -304,9 +304,9 @@ class RewardSettings:
     # curriculum 1 settings (initial)
     class c1:
         # penalty / reward for laying down. Mostly turned off initially
-        joint_error: float = -0.2  # -5e-4
+        joint_error: float = -0.4  # -5e-4
         joint_error_fine: float = 0.4  # 5e-4
-        base_height: float = -0.3  # -5e-4
+        base_height: float = -0.9  # -5e-4
         base_height_fine: float = 0.5  # 5e-4
         base_lin_vel_z: float = -0.2  # -1e-2
 
@@ -342,7 +342,7 @@ class RewardSettings:
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
         joint_vel: float = -5e-4
-        action_rt: float = -0.2
+        action_rt: float = -0.1
 
         # soft_landing: float = 0.1
 
