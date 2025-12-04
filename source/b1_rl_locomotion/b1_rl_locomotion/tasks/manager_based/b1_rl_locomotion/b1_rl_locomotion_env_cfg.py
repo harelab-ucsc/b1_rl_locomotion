@@ -223,17 +223,17 @@ class EventCfg:
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
                 "z": (0.0, 0.3),
-                "roll": (-0.15, 0.15),
-                "pitch": (-0.15, 0.15),
+                "roll": (-0.05, 0.05),
+                "pitch": (-0.05, 0.05),
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (-2, 2),
-                "roll": (-0.1, 0.1),
-                "pitch": (-0.1, 0.1),
-                "yaw": (-0.1, 0.1),
+                "z": (0.1, -0.1),
+                "roll": (-0.05, 0.05),
+                "pitch": (-0.05, 0.05),
+                "yaw": (-0.05, 0.05),
             },
         },
     )
@@ -262,7 +262,7 @@ class EventCfg_PLAY(EventCfg):
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
+                "z": (0.3, 0.3),
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
                 "yaw": (-math.pi, math.pi),
@@ -308,7 +308,7 @@ class RewardSettings:
         joint_error_fine: float = 0.4  # 5e-4
         base_height: float = -0.9  # -5e-4
         base_height_fine: float = 0.5  # 5e-4
-        base_lin_vel_z: float = -0.12  # -1e-2
+        base_lin_vel_z: float = -0.15  # -1e-2
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
