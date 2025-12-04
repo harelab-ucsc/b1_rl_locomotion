@@ -210,7 +210,7 @@ class EventCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
             "position_range": (-0.15, 0.15),
-            "velocity_range": (-0.1, 0.1),
+            "velocity_range": (-0.15, 0.15),
         },
     )
 
@@ -222,17 +222,17 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.0, 0.3),
-                "roll": (-0.05, 0.05),
-                "pitch": (-0.05, 0.05),
+                "z": (0.0, 0.15),
+                "roll": (-0.15, 0.15),
+                "pitch": (-0.15, 0.15),
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.1, -0.1),
-                "roll": (-0.05, 0.05),
-                "pitch": (-0.05, 0.05),
+                "z": (-0.5, 0.5),
+                "roll": (-0.15, 0.15),
+                "pitch": (-0.15, 0.15),
                 "yaw": (-0.05, 0.05),
             },
         },
@@ -262,7 +262,7 @@ class EventCfg_PLAY(EventCfg):
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.3, 0.3),
+                "z": (0.0, 0.0),
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
                 "yaw": (-math.pi, math.pi),
@@ -304,24 +304,24 @@ class RewardSettings:
     # curriculum 1 settings (initial)
     class c1:
         # penalty / reward for laying down. Mostly turned off initially
-        joint_error: float = -0.4  # -5e-4
-        joint_error_fine: float = 0.4  # 5e-4
-        base_height: float = -0.9  # -5e-4
-        base_height_fine: float = 0.5  # 5e-4
-        base_lin_vel_z: float = -0.15  # -1e-2
+        joint_error: float = -0.1  # -5e-4
+        joint_error_fine: float = 0.1  # 5e-4
+        base_height: float = -0.1  # -5e-4
+        base_height_fine: float = 0.1  # 5e-4
+        base_lin_vel_z: float = -0.05  # -1e-2
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
         base_flat_orientation: float = -2.0
-        feet_air_time: float = -0.8  # -0.35
-        feet_contacting_ground: float = -0.7  # -0.05
+        feet_air_time: float = -0.5  # -0.35
+        feet_contacting_ground: float = -0.2  # -0.05
         soft_body_land: float = 0.05
         soft_feet_land: float = 0.1
         # hip_centering: float = -0.1
 
         # smoothness rewards
-        joint_vel: float = -1e-7
-        action_rt: float = -1e-6
+        joint_vel: float = -1e-5
+        action_rt: float = -1e-3
         # soft_landing: float = 1e-3
 
     # curriculum 2 settings (after C1 -> C2)
@@ -344,7 +344,7 @@ class RewardSettings:
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
         joint_vel: float = -5e-4
-        action_rt: float = -0.1
+        action_rt: float = -0.01
 
         # soft_landing: float = 0.1
 
