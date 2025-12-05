@@ -306,8 +306,8 @@ class RewardSettings:
         # penalty / reward for laying down. Mostly turned off initially
         joint_error: float = -0.1  # -5e-4
         joint_error_fine: float = 0.1  # 5e-4
-        base_height: float = -0.1  # -5e-4
-        base_height_fine: float = 0.1  # 5e-4
+        base_height: float = -0.2  # -5e-4
+        base_height_fine: float = 0.2  # 5e-4
         base_lin_vel_z: float = -0.05  # -1e-2
 
         # balancing rewards
@@ -315,7 +315,7 @@ class RewardSettings:
         base_flat_orientation: float = -2.0
         feet_air_time: float = -0.5  # -0.35
         feet_contacting_ground: float = -0.2  # -0.05
-        soft_body_land: float = 0.05
+        soft_body_land: float = 0.1
         soft_feet_land: float = 0.1
         # hip_centering: float = -0.1
 
@@ -467,7 +467,7 @@ class RewardsCfg:
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
             "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
-            "max_thresholds_offset": 200.0,  # 500 N above trigger is too much, starts penalizing
+            "max_thresholds_offset": 800.0,  # 500 N above trigger is too much, starts penalizing
             "trigger_threshold": 700.0,  # minimum force to start rewarding/penalizing
         },
         weight=RewardSettings.c1.soft_body_land,
@@ -691,13 +691,13 @@ class TerminationsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
-    # bad_orientation = DoneTerm(
-    #     func=mdp.bad_orientation,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
-    #         "limit_angle": math.radians(120.0),
-    #     },
-    # )
+    bad_orientation = DoneTerm(
+        func=mdp.bad_orientation,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+            "limit_angle": math.radians(120.0),
+        },
+    )
 
 
 @configclass
@@ -711,7 +711,7 @@ class TerminationsCfg_PLAY:
     falls_over = DoneTerm(
         func=mdp.illegal_contact,
         params={
-            "threshold": 2000,
+            "threshold": 2200,
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
         },
     )
