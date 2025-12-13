@@ -304,11 +304,11 @@ class RewardSettings:
     # curriculum 1 settings (initial)
     class c1:
         # penalty / reward for laying down. Mostly turned off initially
-        joint_error: float = -0.1  # -5e-4
-        joint_error_fine: float = 0.1  # 5e-4
+        joint_error: float = -0.2  # -5e-4
+        joint_error_fine: float = 0.2  # 5e-4
         base_height: float = -0.2  # -5e-4
         base_height_fine: float = 0.2  # 5e-4
-        base_lin_vel_z: float = -0.05  # -1e-2
+        base_lin_vel_z: float = -0.2  # -1e-2
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
@@ -337,14 +337,16 @@ class RewardSettings:
         base_lin_vel_xy: float = -0.12
         base_flat_orientation: float = -3.0
         feet_air_time: float = -0.8
-        feet_contacting_ground: float = -0.7
+        feet_contacting_ground: float = -1.0
 
         # hip_centering: float = 0.0  # turn off hip centering
 
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
-        joint_vel: float = -5e-4
-        action_rt: float = -0.01
+        joint_vel: float = -5e-3
+        action_rt: float = -0.05
+
+        feet_contacting_ground: float = -0.7
 
         # soft_landing: float = 0.1
 
@@ -622,16 +624,16 @@ class CurriculumCfg:
     #         "t1": CurriculumSettings.c2.end_step,
     #     },
     # )
-    # feet_contacting_ground = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "feet_contacting_ground",
-    #         "w0": RewardSettings.c1.feet_contacting_ground,
-    #         "w1": RewardSettings.c2.feet_contacting_ground,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
+    feet_contacting_ground = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "feet_contacting_ground",
+            "w0": RewardSettings.c1.feet_contacting_ground,
+            "w1": RewardSettings.c2_1.feet_contacting_ground,
+            "t0": CurriculumSettings.c2_1.activation_step,
+            "t1": CurriculumSettings.c2_1.end_step,
+        },
+    )
 
     # hip_centering = CurrTerm(
     #     func=mdp.lerp_reward_weight,
