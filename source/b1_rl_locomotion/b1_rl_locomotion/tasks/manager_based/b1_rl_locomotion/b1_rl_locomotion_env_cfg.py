@@ -314,8 +314,8 @@ class RewardSettings:
         base_lin_vel_xy: float = -0.1
         base_flat_orientation: float = -2.0
         feet_air_time: float = -0.5  # -0.35
-        feet_contacting_ground: float = -0.2  # -0.05
-        soft_body_land: float = 0.1
+        feet_contacting_ground: float = -0.1  # -0.05
+        soft_body_land: float = 0.3
         soft_feet_land: float = 0.1
         # hip_centering: float = -0.1
 
@@ -343,10 +343,10 @@ class RewardSettings:
 
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
-        joint_vel: float = -5e-3
+        joint_vel: float = -5e-4
         action_rt: float = -0.05
 
-        feet_contacting_ground: float = -0.7
+        feet_contacting_ground: float = -0.3
 
         # soft_landing: float = 0.1
 
@@ -469,8 +469,8 @@ class RewardsCfg:
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces_body"),
             "no_contact_penalty": 0,  # no penalty for no contact (other terms take care of this)
-            "max_thresholds_offset": 800.0,  # 500 N above trigger is too much, starts penalizing
-            "trigger_threshold": 700.0,  # minimum force to start rewarding/penalizing
+            "max_thresholds_offset": 1000.0,  # offset for when to starts penalizing (offset + trigger threshold)
+            "trigger_threshold": 100.0,  # minimum force to start rewarding/penalizing
         },
         weight=RewardSettings.c1.soft_body_land,
     )
@@ -771,6 +771,7 @@ class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
         super().__post_init__()
 
         """Post initialization."""
+        self.viewer.origin_type = "world"
         self.viewer.env_index = 0
 
         # general settings
