@@ -11,6 +11,6 @@ Python module serving as a project/extension template.
 from .tasks import *
 
 # Register UI extensions.
-# from .ui_extension_example import *
-from .b1_sit_to_stand_extension import B1StandExtension
-from .b1_sit_to_stand import B1Stand
+from .ui_extension_example import *
+# from .b1_sit_to_stand_extension import B1StandExtension
+# from .b1_sit_to_stand import B1Stand

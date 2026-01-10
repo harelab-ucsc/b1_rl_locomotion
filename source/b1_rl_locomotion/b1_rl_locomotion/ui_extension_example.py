@@ -21,6 +21,7 @@ class ExampleExtension(omni.ext.IExt):
     def on_startup(self, ext_id):
         print("[b1_rl_locomotion] startup")
 
+
         self._count = 0
 
         self._window = omni.ui.Window("My Window", width=300, height=300)

@@ -41,11 +41,11 @@ memory:
 agent:
   class: PPO
   rollouts: 32
-  learning_epochs: 15
+  learning_epochs: 16
   mini_batches: 8
-  discount_factor: 0.95
+  discount_factor: 0.9
   lambda: 0.95
-  learning_rate: 4.0e-03
+  learning_rate: 3.0e-03
   learning_rate_scheduler: KLAdaptiveLR
   learning_rate_scheduler_kwargs:
     kl_threshold: 0.01 # 0.008
@@ -67,7 +67,7 @@ agent:
   # logging and checkpoint
   experiment:
     directory: "stand_sit"
-    experiment_name: "test"
+    experiment_name: "19"
     write_interval: auto
     checkpoint_interval: auto
     wandb: True
@@ -77,5 +77,5 @@ agent:
 # https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
 trainer:
   class: SequentialTrainer
-  timesteps: 30000
+  timesteps: 50000
   environment_info: log

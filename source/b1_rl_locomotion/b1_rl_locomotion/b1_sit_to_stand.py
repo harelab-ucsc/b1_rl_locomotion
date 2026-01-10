@@ -11,10 +11,9 @@ class B1Stand(BaseSample):
     def __init__(self) -> None:
         super().__init__()
         self._world_settings["stage_units_in_meters"] = 1.0
-        self._world_settings["physics_dt"] = 1.0 / 500.0
-        self._world_settings["rendering_dt"] = 10.0 / 500.0
-        self._base_command = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,]
-
+        self._world_settings["physics_dt"] = 1.0 / 120
+        self._world_settings["rendering_dt"] = 10.0 / 120.0
+        
         # bindings for keyboard to command
         self._input_keyboard_mapping = {
             # forward command
@@ -31,11 +30,12 @@ class B1Stand(BaseSample):
             dynamic_friction=0.2,
             restitution=0.01,
         )
-        self.spot = B1StandPolicy(
+        self.b1 = B1StandPolicy(
             prim_path="/Robot",
             name="b1_description",
             position=np.array([0, 0, 0.12]),
         )
+        
         timeline = omni.timeline.get_timeline_interface()
         self._event_timer_callback = timeline.get_timeline_event_stream().create_subscription_to_pop_by_type(
             int(omni.timeline.TimelineEventType.STOP), self._timeline_timer_callback_fn
@@ -55,25 +55,24 @@ class B1Stand(BaseSample):
         await self._world.play_async()
 
     def on_physics_step(self, step_size) -> None:
-        if self._physics_ready:
-            self.spot.stand(step_size, self._base_command)
+        if self._physics_ready and  self._sub_keyboard:
+            # self.b1.stand(step_size, self._command)
+            self.b1.robot.set_joints_default_state(self.b1.default_pos)
         else:
             self._physics_ready = True
-            self.spot.initialize()
-            self.spot.post_reset()
-            self.spot.robot.set_joints_default_state(self.spot.default_pos)
+            self.b1.initialize()
+            self.b1.post_reset()
+            self.b1.robot.set_joints_default_state(self.b1.default_pos)
 
     def _sub_keyboard_event(self, event, *args, **kwargs) -> bool:
         """Subscriber callback to when kit is updated."""
 
         # when a key is pressedor released  the command is adjusted w.r.t the key-mapping
         if event.type == carb.input.KeyboardEventType.KEY_PRESS:
-            # on pressing, the command is incremented
-            if event.input.name in self._input_keyboard_mapping:
-                self._base_command += np.array(self._input_keyboard_mapping[event.input.name])
+            self._command = np.array(self._input_keyboard_mapping[event.input.name])
 
     def _timeline_timer_callback_fn(self, event) -> None:
-        if self.spot:
+        if self.b1:
             self._physics_ready = False
 
     def world_cleanup(self):
