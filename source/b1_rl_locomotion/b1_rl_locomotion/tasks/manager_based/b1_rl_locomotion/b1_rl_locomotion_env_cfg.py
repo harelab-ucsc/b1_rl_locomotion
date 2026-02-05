@@ -156,10 +156,10 @@ class ObservationsCfg:
             func=mdp.joint_pos_rel,
             noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
-        joint_vel_rel = ObsTerm(
-            func=mdp.joint_vel_rel,
-            noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
-        )
+        # joint_vel_rel = ObsTerm(
+        #     func=mdp.joint_vel_rel,
+        #     noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
+        # )
 
         # contact_feet = ObsTerm(
         #     func=mdp.contact_sensor_force,
@@ -168,21 +168,21 @@ class ObservationsCfg:
         # )
 
         # relevant IMU data
-        imu_orientation = ObsTerm(
-            func=mdp.imu_orientation,
-            params={"asset_cfg": SceneEntityCfg("imu_sensor")},
-            noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
-        )
+        # imu_orientation = ObsTerm(
+        #     func=mdp.imu_orientation,
+        #     params={"asset_cfg": SceneEntityCfg("imu_sensor")},
+        #     noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
+        # )
         imu_lin_acc = ObsTerm(
             func=mdp.imu_lin_acc,
             params={"asset_cfg": SceneEntityCfg("imu_sensor")},
             noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
-        imu_ang_vel = ObsTerm(
-            func=mdp.imu_ang_vel,
-            params={"asset_cfg": SceneEntityCfg("imu_sensor")},
-            noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
-        )
+        # imu_ang_vel = ObsTerm(
+        #     func=mdp.imu_ang_vel,
+        #     params={"asset_cfg": SceneEntityCfg("imu_sensor")},
+        #     noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
+        # )
 
         last_action = ObsTerm(func=mdp.last_action)
 
@@ -223,17 +223,22 @@ class EventCfg:
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
                 "z": (0.0, 0.15),
-                "roll": (-0.15, 0.15),
-                "pitch": (-0.15, 0.15),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                # "roll": (-0.15, 0.15),
+                # "pitch": (-0.15, 0.15),
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
                 "z": (-0.5, 0.5),
-                "roll": (-0.15, 0.15),
-                "pitch": (-0.15, 0.15),
-                "yaw": (-0.05, 0.05),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+                # "roll": (-0.15, 0.15),
+                # "pitch": (-0.15, 0.15),
+                # "yaw": (-0.05, 0.05),
             },
         },
     )
