@@ -151,14 +151,41 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Observations for policy group."""
 
+        # No proprioceptive noise:
+        # https://isaac-sim.github.io/IsaacLab/main/source/policy_deployment/02_gear_assembly/gear_assembly_policy.html
+
         # observation terms (order preserved)
         joint_pos_rel = ObsTerm(
             func=mdp.joint_pos_rel,
-            noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
+            # noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[
+                        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+                        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+                        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
+                        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint"
+                    ],
+                    preserve_order=True,  # keep on for model transfer
+                )
+            },
         )
         # joint_vel_rel = ObsTerm(
         #     func=mdp.joint_vel_rel,
-        #     noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
+        #     # noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
+        #     params={
+        #         "asset_cfg": SceneEntityCfg(
+        #             "robot",
+        #             joint_names=[
+        #                 "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        #                 "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        #                 "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
+        #                 "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint"
+        #             ],
+        #             preserve_order=True,  # keep on for model transfer
+        #         )
+        #     },
         # )
 
         # contact_feet = ObsTerm(
@@ -173,11 +200,13 @@ class ObservationsCfg:
         #     params={"asset_cfg": SceneEntityCfg("imu_sensor")},
         #     noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         # )
+        
         imu_lin_acc = ObsTerm(
             func=mdp.imu_lin_acc,
             params={"asset_cfg": SceneEntityCfg("imu_sensor")},
             noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         )
+
         # imu_ang_vel = ObsTerm(
         #     func=mdp.imu_ang_vel,
         #     params={"asset_cfg": SceneEntityCfg("imu_sensor")},
@@ -349,7 +378,7 @@ class RewardSettings:
     # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
         joint_vel: float = -5e-4
-        action_rt: float = -0.05
+        action_rt: float = -0.1
 
         feet_contacting_ground: float = -0.3
 
@@ -779,7 +808,9 @@ class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
         self.viewer.origin_type = "world"
         self.viewer.env_index = 0
 
+        self.episode_length_s = 60
+
         # general settings
-        self.scene.num_envs = 5
+        self.scene.num_envs = 1
         # disable noise
         self.observations.policy.enable_corruption = False
