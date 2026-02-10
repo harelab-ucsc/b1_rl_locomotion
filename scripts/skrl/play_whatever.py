@@ -256,38 +256,38 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
             # print(runner.agent.policy)
 
             # - multi-agent (deterministic) actions
-            # if hasattr(env, "possible_agents"):
-            #     actions = {a: outputs[-1][a].get("mean_actions", outputs[0][a]) for a in env.possible_agents}
-            # # - single-agent (deterministic) actions
-            # else:
-            #     actions = outputs[-1].get("mean_actions", outputs[0])
+            if hasattr(env, "possible_agents"):
+                actions = {a: outputs[-1][a].get("mean_actions", outputs[0][a]) for a in env.possible_agents}
+            # - single-agent (deterministic) actions
+            else:
+                actions = outputs[-1].get("mean_actions", outputs[0])
 
-            # MANUAL JOINTS OVERRIDE
-            actions = torch.tensor([[
-                0, # FL_HIP
-                0, # FL_THIGH
-                0, # FL_CALF
-                0, # FR_HIP
-                0, # FR_THIGH
-                0, # FR_CALF
-                0, # RL_HIP
-                0, # RL_THIGH
-                0, # RL_CALF
-                0, # RR_HIP
-                0, # RR_THIGH
-                0, # RR_CALF
-            ]])
-            actions[0][target_joint_to_test] = 1
+            # # MANUAL JOINTS OVERRIDE
+            # actions = torch.tensor([[
+            #     0, # FL_HIP
+            #     0, # FL_THIGH
+            #     0, # FL_CALF
+            #     0, # FR_HIP
+            #     0, # FR_THIGH
+            #     0, # FR_CALF
+            #     0, # RL_HIP
+            #     0, # RL_THIGH
+            #     0, # RL_CALF
+            #     0, # RR_HIP
+            #     0, # RR_THIGH
+            #     0, # RR_CALF
+            # ]])
+            # actions[0][target_joint_to_test] = 1
 
-            joint_order_list = ["FL_HIP  ", "FL_THIGH", "FL_CALF ", "FR_HIP  ", "FR_THIGH", "FR_CALF ", "RL_HIP  ", "RL_THIGH", "RL_CALF ", "RR_HIP  ", "RR_THIGH", "RR_CALF "]
+            # joint_order_list = ["FL_HIP  ", "FL_THIGH", "FL_CALF ", "FR_HIP  ", "FR_THIGH", "FR_CALF ", "RL_HIP  ", "RL_THIGH", "RL_CALF ", "RR_HIP  ", "RR_THIGH", "RR_CALF "]
 
-            for i in range(12):
-                action_active = "😺" if actions[0][i].item() > 0.5 else "👺"
-                obs_active = "😺" if obs[0][i].item() > 0.5 else "👺"
+            # for i in range(12):
+            #     action_active = "😺" if actions[0][i].item() > 0.5 else "👺"
+            #     obs_active = "😺" if obs[0][i].item() > 0.5 else "👺"
 
-                print(f"{joint_order_list[i]} (action / obs): {action_active} / {obs_active}")
+            #     print(f"{joint_order_list[i]} (action / obs): {action_active} / {obs_active}")
 
-            print("="*20)
+            # print("="*20)
 
             # env stepping
             obs, _, _, _, _ = env.step(actions)
@@ -297,11 +297,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
             if timestep == args_cli.video_length:
                 break
 
-        # i += 1
-        # if (i*dt >2):
-        #     # print("ALL  OBS:   ")
-        #     # print(all_obs)
-        #     break 
+        i += 1
+        if (i*dt > 3): 
+            # write all observations to a file
+            print("Writing all observations to all_obs.txt")
+            with open("all_obs.txt", "w") as f:
+                for obs in all_obs:
+                    f.write(",".join([str(o) for o in obs]) + "\n")
+            # exit the loop
+            break
 
         # time delay for real-time evaluation
         sleep_time = dt - (time.time() - start_time)
