@@ -66,6 +66,49 @@ def base_height_from_command(
 
     return height_err
 
+def threshold_contact_reward(
+    env,
+    sensor_cfg: SceneEntityCfg,
+    no_contact_penalty: float = 0.2,
+    max_thresholds_offset: float = 200.0,  # 200 N above trigger is too much, starts penalizing
+    trigger_threshold: float = 588.0,  # minimum force at which we start scaling reward; below this we apply no_contact_penalty
+) -> torch.Tensor:
+    """
+    Reward based on contact sensor net force with thresholds.
+    Reward gentle contact, penalize too much contact, optionally penalize
+    no/very weak contact with a fixed penalty.
+
+    Let max_threshold = trigger_threshold + max_thresholds_offset.
+
+    - max_force <= trigger_threshold: constant penalty = -no_contact_penalty
+    - trigger_threshold < max_force < max_threshold: positive reward,
+      decreasing linearly from 1 down to 0
+    - max_force = max_threshold: zero reward
+    - max_force > max_threshold: negative reward (too strong contact)
+    """
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    # N = num envs, H = history length, B = num bodies
+    net_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]  # type: ignore # [N, H, B, 3]
+    force_magnitudes = net_forces.norm(dim=-1)  # [N, H, B]
+    max_force, _ = force_magnitudes.max(dim=1)  # [N, B]
+
+    # print("[DEBUG] Threshold contact reward: max_force =", max_force, max_force.shape)
+
+    mask = (max_force > trigger_threshold).float()  # [N, B]
+
+    raw_rew = -(max_force - trigger_threshold) / max_thresholds_offset + 1.0
+    raw_rew += no_contact_penalty  # [N, B]
+
+    reward = (raw_rew * mask) - no_contact_penalty  # [N, B]
+
+    # average over all bodies
+    reward = reward.mean(dim=1)  # [N]
+
+    # print("[DEBUG] Sparse threshold contact reward:", reward, reward.shape)
+
+    return reward
+
 
 def body_lin_vel_l2(
     env: ManagerBasedRLEnv,
@@ -126,27 +169,67 @@ def joint_mirror_l1(env: ManagerBasedRLEnv,
     angle = asset.data.joint_pos[:, asset_cfg.joint_ids[0]] - asset.data.joint_pos[:, asset_cfg.joint_ids[1]]
     return torch.abs(angle)
 
-def slipping_l2(env: ManagerBasedRLEnv,
-                asset_cfg: SceneEntityCfg = SceneEntityCfg("robot",
-                                                           body_names=[".*_foot"]),
-                sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces.*_foot"),
-                threshold = 1.0) -> torch.Tensor:
-    """Penalize x y movement when foot is on the ground (experiencing contact force)"""
-    # extract the used quantities (to enable type-hinting)
+def air_time_penalty(
+    env,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize feet air time based on contact sensor net force history."""
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    asset: Articulation = env.scene[asset_cfg.name]
-    # compute forces and linear xy velocity
-    net_contact_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]
-    body_lin_vel_xy = asset.data.body_com_lin_vel_w[:, asset_cfg.body_ids, :2]
-    # find force and vel norms
-    body_lin_vel_xy_norm = body_lin_vel_xy.norm(dim=-1)
-    force_norm = net_contact_forces.norm(dim=-1)
-    # use most recent contact update
-    contact = force_norm.max(dim=1)[0] > threshold
-    # compute penalty
-    # print(f"DEBUGGING: {torch.mean(body_lin_vel_xy_norm**2)}")
-    penalty = torch.where(contact,
-                          body_lin_vel_xy_norm ** 2,
-                          torch.full_like(body_lin_vel_xy_norm, 5)) # TODO: tune this pad <-
-    return penalty.sum(dim=1)
 
+    air_time = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids]  # type: ignore
+
+    # print("[DEBUG] Air time penalty:", air_time, air_time.shape)
+    return air_time.max(dim=1).values
+
+def foot_slip_penalty(
+    env,
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_threshold: float = 1.0,  # what counts as "in contact"
+    slip_threshold: float = 0.5,  # m/s
+) -> torch.Tensor:
+    """Penalize foot slip based on contact sensor net force history."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    net_forces = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]  # type: ignore
+    force_magnitudes = net_forces.norm(dim=-1)
+    max_force, _ = force_magnitudes.max(dim=1)
+
+    # trigger mask
+    mask = (max_force > contact_threshold).float()  # env x 4
+
+    robot: Articulation = env.scene[asset_cfg.name]
+    foot_vel_w = robot.data.body_link_lin_vel_w[:, asset_cfg.body_ids, :].norm(
+        dim=2
+    )  # env x 4
+
+    # apply the slip threshold
+    slip_mask = (foot_vel_w > slip_threshold).float()
+
+    # final penalty (max over feet)
+    penalty = (slip_mask * mask).max(dim=1).values
+
+    # print("[DEBUG] Foot slip penalty:", penalty, penalty.shape)
+    return penalty
+
+def strict_desired_contacts_penalty(
+    env, sensor_cfg: SceneEntityCfg, threshold: float = 1.0
+) -> torch.Tensor:
+    """Penalize if any of the desired contacts are non-present."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contacts = (
+        contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]  # type: ignore
+        .norm(dim=-1)
+        .max(dim=1)[0]
+        > threshold
+    )
+    all_contact = ~(contacts.all(dim=1))  # invert: True if any contact missing
+
+    # print("[DEBUG] Strict desired contacts penalty:", all_contact, all_contact.shape)
+
+    return all_contact.float()
+
+def thigh_relaxed_l2(env, asset_cfg):
+    asset = env.scene[asset_cfg.name]
+    thigh_positions = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    return torch.sum((thigh_positions - 0.0) ** 2, dim=1)
