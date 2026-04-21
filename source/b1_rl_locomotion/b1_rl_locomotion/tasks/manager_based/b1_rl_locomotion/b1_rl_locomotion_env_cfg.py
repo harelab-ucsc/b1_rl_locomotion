@@ -204,7 +204,7 @@ class ObservationsCfg:
         imu_lin_acc = ObsTerm(
             func=mdp.imu_lin_acc,
             params={"asset_cfg": SceneEntityCfg("imu_sensor")},
-            noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
+            noise=AdditiveUniformNoiseCfg(n_min=-0.15, n_max=0.15),
         )
 
         # imu_ang_vel = ObsTerm(
@@ -233,13 +233,43 @@ class EventCfg:
     """Configuration for events."""
 
     # reset
-    reset_all_joints = EventTerm(
+    reset_L_hip_joints = EventTerm(
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
-            "position_range": (-0.3, 0.3),
-            "velocity_range": (-0.3, 0.3),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["[F,R]L_hip_joint"]),
+            "position_range": (-0.4, 0.4),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    reset_R_hip_joints = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["[F,R]R_hip_joint"]),
+            "position_range": (-0.4, 0.4),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    reset_thigh_joints = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_thigh_joint"]),
+            "position_range": (-1, 0.4),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    reset_calf_joints = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_calf_joint"]),
+            "position_range": (-0.4, 1.4),
+            "velocity_range": (0.0, 0.0),
         },
     )
 
@@ -278,12 +308,42 @@ class EventCfg_PLAY(EventCfg):
     """Configuration for events."""
 
     # reset
-    reset_all_joints = EventTerm(
+    reset_L_hip_joints = EventTerm(
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
-            "position_range": (0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["[F,R]L_hip_joint"]),
+            "position_range": (-0.026179, -0.026179),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    reset_R_hip_joints = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["[F,R]R_hip_joint"]),
+            "position_range": (0.026179, 0.026179),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    reset_thigh_joints = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_thigh_joint"]),
+            "position_range": (-0.7330382, -0.7330382),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    reset_calf_joints = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_calf_joint"]),
+            "position_range": (1.3788101, 1.3788101),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -808,9 +868,9 @@ class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
         self.viewer.origin_type = "world"
         self.viewer.env_index = 0
 
-        self.episode_length_s = 60
+        self.episode_length_s = 7
 
         # general settings
         self.scene.num_envs = 1
         # disable noise
-        self.observations.policy.enable_corruption = False
+        self.observations.policy.enable_corruption = True
