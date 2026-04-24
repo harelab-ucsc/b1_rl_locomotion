@@ -14,6 +14,7 @@ a more user-friendly way.
 
 import argparse
 import sys
+from pathlib import Path
 
 from isaaclab.app import AppLauncher
 
@@ -64,6 +65,7 @@ simulation_app = app_launcher.app
 
 import gymnasium as gym
 import os
+import pickle
 import random
 from datetime import datetime
 
@@ -89,17 +91,39 @@ if args_cli.ml_framework.startswith("torch"):
 elif args_cli.ml_framework.startswith("jax"):
     from skrl.utils.runner.jax import Runner
 
-import isaaclab_tasks_experimental  # noqa: F401
+# import isaaclab_tasks_experimental  # noqa: F401
 
 from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
+from isaaclab.utils import class_to_dict
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.io import dump_pickle, dump_yaml
+from isaaclab.utils.io import dump_yaml
+
+try:
+    from isaaclab.utils.io import dump_pickle
+except ImportError:
+
+    def dump_pickle(filename: str, data: dict | object):
+        """Compatibility fallback for Isaac Lab builds without io.dump_pickle."""
+        if not filename.endswith("pkl"):
+            filename += ".pkl"
+        if not os.path.exists(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+        if not isinstance(data, dict):
+            data = class_to_dict(data)
+        with open(filename, "wb") as f:
+            pickle.dump(data, f)
 
 from isaaclab_rl.skrl import SkrlVecEnvWrapper
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.hydra import hydra_task_config
+
+# Add the local extension package when running from the repo without installation.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+LOCAL_EXTENSION_ROOT = REPO_ROOT / "source" / "b1_rl_locomotion"
+if str(LOCAL_EXTENSION_ROOT) not in sys.path:
+    sys.path.insert(0, str(LOCAL_EXTENSION_ROOT))
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 import b1_rl_locomotion.tasks  # noqa: F401

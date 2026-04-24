@@ -5,6 +5,4 @@
 
 """Pre-defined terrain configurations for the terrain generator."""
 
-from isaaclab.utils.module import lazy_export
-
-lazy_export()
+from .rough import ROUGH_TERRAINS_CFG

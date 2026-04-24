@@ -6,8 +6,7 @@
 """Configuration for custom terrains."""
 
 import isaaclab.terrains as terrain_gen
-
-from ..terrain_generator_cfg import TerrainGeneratorCfg
+from isaaclab.terrains import TerrainGeneratorCfg
 
 ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     size=(8.0, 8.0),

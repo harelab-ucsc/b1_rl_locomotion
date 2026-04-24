@@ -16,11 +16,13 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 from . import mdp
+
 
 ##
 # Pre-defined configs
@@ -28,7 +30,7 @@ from . import mdp
 
 from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_CFG 
 from isaaclab.terrains import TerrainImporterCfg   # (or the exact IsaacLab module path)
-from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.terrains.config.rough import ROUGH_TERRAINS_CFG
+from isaaclab.terrains.config import ROUGH_TERRAINS_CFG
 ##
 # Scene definition
 ##
@@ -59,12 +61,21 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
     )
     # robot
     robot: ArticulationCfg = B1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
-
+    # sensors
+    height_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/base",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+        attach_yaw_only=True,
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+    )
     contact_forces = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*",
         history_length=3,
         debug_vis=False,
-        filter_prim_paths_expr=None,
+        filter_prim_paths_expr=[],
+        track_air_time=True
     )
 
     # lights
@@ -77,40 +88,6 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
 ##
 # MDP settings
 ##
-
-
-@configclass
-class ActionsCfg:
-    """Action specifications for the MDP."""
-
-    joint_effort = mdp.JointPositionActionCfg(
-        asset_name="robot",
-        joint_names=[  # FL -> FR -> RL -> RR  and  hip -> thigh -> calf
-            "FL_hip_joint",
-            "FL_thigh_joint",
-            "FL_calf_joint",
-            "FR_hip_joint",
-            "FR_thigh_joint",
-            "FR_calf_joint",
-            "RL_hip_joint",
-            "RL_thigh_joint",
-            "RL_calf_joint",
-            "RR_hip_joint",
-            "RR_thigh_joint",
-            "RR_calf_joint",
-        ],
-        use_default_offset=True,
-        scale=1.0,
-        preserve_order=True,  # keep on for model transfer
-        debug_vis=False,
-    )
-
-@configclass
-class CurriculumCfg:
-    """Curriculum terms for the MDP."""
-
-    terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
-
 
 @configclass
 class CommandCfg:
@@ -133,6 +110,33 @@ class CommandCfg:
 
 
 @configclass
+class ActionsCfg:
+    """Action specifications for the MDP."""
+
+    joint_pos = mdp.JointPositionActionCfg(
+        asset_name="robot",
+        joint_names=[  # FL -> FR -> RL -> RR  and  hip -> thigh -> calf
+            "FL_hip_joint",
+            "FL_thigh_joint",
+            "FL_calf_joint",
+            "FR_hip_joint",
+            "FR_thigh_joint",
+            "FR_calf_joint",
+            "RL_hip_joint",
+            "RL_thigh_joint",
+            "RL_calf_joint",
+            "RR_hip_joint",
+            "RR_thigh_joint",
+            "RR_calf_joint",
+        ],
+        use_default_offset=True,
+        scale=0.75,
+        preserve_order=True,  # keep on for model transfer
+        debug_vis=False,
+    )
+
+
+@configclass
 class ObservationsCfg:
     """Observation specifications for the MDP."""
 
@@ -144,15 +148,22 @@ class ObservationsCfg:
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)  # add noise later: noise=Unoise(n_min=-0.1, n_max=0.1)
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel)  # add noise later: noise=Unoise(n_min=-0.2, n_max=0.2)
 
-        joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
-        joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
+        joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
+        joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
 
         # command
         velocity_cmd = ObsTerm(
             func=mdp.generated_commands, params={"command_name": "velocity"}
         )
         actions = ObsTerm(func=mdp.last_action)
-        gravity = ObsTerm(func=mdp.projected_gravity)
+        gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.05, n_max=0.05))
+        
+        height_scan = ObsTerm(
+            func=mdp.height_scan,
+            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+            noise=Unoise(n_min=-0.1, n_max=0.1),
+            clip=(-1.0, 1.0),
+        )
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -232,6 +243,14 @@ class EventCfg:
         },
     )
 
+    # interval
+    # push_robot = EventTerm(
+    #     func=mdp.push_by_setting_velocity,
+    #     mode="interval",
+    #     interval_range_s=(10.0, 15.0),
+    #     params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
+    # )
+
 
 @configclass
 class RewardsCfg:
@@ -296,6 +315,12 @@ class TerminationsCfg:
         },
     )
 
+@configclass
+class CurriculumCfg:
+    """Curriculum terms for the MDP."""
+
+    terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+
 
 ##
 # Environment configuration
@@ -330,7 +355,22 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
+        self.sim.physics_material = self.scene.terrain.physics_material
 
+        # we tick all the sensors based on the smallest update period (physics update period)
+        if self.scene.height_scanner is not None:
+            self.scene.height_scanner.update_period = self.decimation * self.sim.dt
+        if self.scene.contact_forces is not None:
+            self.scene.contact_forces.update_period = self.sim.dt
+
+        # check if terrain levels curriculum is enabled - if so, enable curriculum for terrain generator
+        # this generates terrains with increasing difficulty and is useful for training
+        if getattr(self.curriculum, "terrain_levels", None) is not None:
+            if self.scene.terrain.terrain_generator is not None:
+                self.scene.terrain.terrain_generator.curriculum = True
+        else:
+            if self.scene.terrain.terrain_generator is not None:
+                self.scene.terrain.terrain_generator.curriculum = False
 
 @configclass
 class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
