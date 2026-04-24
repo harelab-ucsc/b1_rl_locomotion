@@ -17,6 +17,8 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
 
 from . import mdp
 
@@ -24,8 +26,9 @@ from . import mdp
 # Pre-defined configs
 ##
 
-from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_CFG
-
+from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_CFG 
+from isaaclab.terrains import TerrainImporterCfg   # (or the exact IsaacLab module path)
+from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.terrains.config.rough import ROUGH_TERRAINS_CFG
 ##
 # Scene definition
 ##
@@ -33,44 +36,35 @@ from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_
 
 @configclass
 class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
-    """Configuration for a cart-pole scene."""
 
-    # ground plane
-    ground = AssetBaseCfg(
+    # ground terrain
+    terrain = TerrainImporterCfg(
         prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(size=(500.0, 500.0)),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),
+        terrain_type="generator",
+        terrain_generator=ROUGH_TERRAINS_CFG,
+        max_init_terrain_level=5,
+        collision_group=-1,
+        physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
+            static_friction=1.0,
+            dynamic_friction=1.0,
+        ),
+        visual_material=sim_utils.MdlFileCfg(
+            mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
+            project_uvw=True,
+            texture_scale=(0.25, 0.25),
+        ),
+        debug_vis=False,
     )
-
     # robot
-    # robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
     robot: ArticulationCfg = B1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")  # type: ignore
 
-    contact_forces_body = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/base",
-        update_period=0.0,
-        history_length=6,
-        debug_vis=True,
-        filter_prim_paths_expr=["/World/ground"],
-    )
-
-    contact_forces_thigh = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_thigh",
-        update_period=0.0,
-        history_length=6,
-        force_threshold=0.0,
-        debug_vis=True,
-        filter_prim_paths_expr=["/World/ground"],
-    )
-
-    contact_forces_calf = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*_calf",
-        update_period=0.0,
-        history_length=6,
-        force_threshold=0.0,
-        debug_vis=True,
-        track_air_time=True,
-        filter_prim_paths_expr=["/World/ground"],
+    contact_forces = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/b1_description/.*",
+        history_length=3,
+        debug_vis=False,
+        filter_prim_paths_expr=None,
     )
 
     # lights
@@ -108,8 +102,14 @@ class ActionsCfg:
         use_default_offset=True,
         scale=1.0,
         preserve_order=True,  # keep on for model transfer
-        debug_vis=True,
+        debug_vis=False,
     )
+
+@configclass
+class CurriculumCfg:
+    """Curriculum terms for the MDP."""
+
+    terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
 
 @configclass
@@ -128,7 +128,7 @@ class CommandCfg:
             heading=(-math.pi, math.pi),
         ),
         resampling_time_range=(10, 10),
-        debug_vis=True,
+        debug_vis=False,
     )
 
 
@@ -255,21 +255,21 @@ class RewardsCfg:
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.025)
 
     # thigh contact
-    thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 1.0, "sensor_cfg": SceneEntityCfg("contact_forces_thigh")})
+    thigh_contact = RewTerm(func=mdp.undesired_contacts, weight=-1, params={"threshold": 1.0, "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_thigh")})
 
     # Flat Orientation
-    flat_orientation = RewTerm(func=mdp.flat_orientation_l2, weight=-8)
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-8)
 
     # Soft Joint Limits (prevent cross legs)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-1.0)
 
     # torques
-    torques = RewTerm(func=mdp.joint_torques_l2, weight=-2.5e-6)
+    dof_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-2.5e-6)
 
     dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
 
     # Feet Air time (pos weight but negative reward due to )
-    feet_air_time = RewTerm(func=mdp.feet_air_time, weight=8.0, params={"sensor_cfg": SceneEntityCfg("contact_forces_calf"), "command_name": "velocity", "threshold": 0.125})
+    feet_air_time = RewTerm(func=mdp.feet_air_time, weight=8.0, params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_calf"), "command_name": "velocity", "threshold": 0.125})
 
     # Failure penalty
     terminating = RewTerm(func=mdp.is_terminated, weight=-45)
@@ -292,7 +292,7 @@ class TerminationsCfg:
         func=mdp.illegal_contact,
         params={
             "threshold": 1.0,
-            "sensor_cfg": SceneEntityCfg("contact_forces_body"),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="base"),
         },
     )
 
@@ -317,6 +317,7 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
+    curriculum: CurriculumCfg = CurriculumCfg()
 
     # Post initialization
     def __post_init__(self) -> None:
