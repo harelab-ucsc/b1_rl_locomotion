@@ -16,6 +16,7 @@
 
 # Python
 .DS_Store
+**/pycache/
 **/*.egg-info/
 **/__pycache__/
 **/.pytest_cache/
