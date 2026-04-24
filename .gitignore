@@ -42,7 +42,11 @@ docker/.container.cfg
 **/output/*
 **/outputs/*
 **/videos/*
+wandb/
+**/wandb/
 **/wandb/*
+.wandb/
+**/.wandb/
 **/.neptune/*
 docker/artifacts/
 *.tmp

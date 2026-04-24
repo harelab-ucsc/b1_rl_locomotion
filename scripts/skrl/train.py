@@ -32,6 +32,19 @@ parser.add_argument(
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint to resume training.")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument(
+    "--logger",
+    type=str,
+    default="wandb",
+    choices=["tensorboard", "wandb"],
+    help="Logger backend. Defaults to wandb.",
+)
+parser.add_argument(
+    "--log_project_name",
+    type=str,
+    default=None,
+    help="Weights & Biases project name (used only when logger is wandb).",
+)
+parser.add_argument(
     "--ml_framework",
     type=str,
     default="torch",
@@ -159,6 +172,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: dict):
     # note: certain randomization occur in the environment initialization so we set the seed here
     agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     env_cfg.seed = agent_cfg["seed"]
+    # logger configuration override
+    agent_cfg["agent"]["experiment"]["wandb"] = args_cli.logger == "wandb"
+    if agent_cfg["agent"]["experiment"].get("wandb", False):
+        agent_cfg["agent"]["experiment"].setdefault("wandb_kwargs", {})
+        if args_cli.log_project_name:
+            agent_cfg["agent"]["experiment"]["wandb_kwargs"]["project"] = args_cli.log_project_name
+        else:
+            agent_cfg["agent"]["experiment"]["wandb_kwargs"].setdefault("project", "b1-locomotion")
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "skrl", agent_cfg["agent"]["experiment"]["directory"])
