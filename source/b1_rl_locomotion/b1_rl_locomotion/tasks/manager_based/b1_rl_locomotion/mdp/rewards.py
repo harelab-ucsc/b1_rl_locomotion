@@ -91,7 +91,8 @@ def center_joints_pos(
     robot: Articulation = env.scene[asset_cfg.name]
 
     joint_pos = robot.data.joint_pos[:, asset_cfg.joint_ids]
-    pos_diff = torch.square(joint_pos)  # squared difference from zero
+    default_pos = robot.data.default_joint_pos[:, asset_cfg.joint_ids]
+    pos_diff = torch.square(joint_pos - default_pos)  # squared difference from default
 
     # Return per-env scalar (sum over all joints)
     return torch.max(pos_diff, dim=1).values

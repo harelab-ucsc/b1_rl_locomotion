@@ -310,7 +310,7 @@ class RewardsCfg:
             "use_tanh": True,
             "tanh_scale": 0.05,
         },
-        weight=0.5,
+        weight=0.35,
     )
 
     # Track base velocity (CoM)
@@ -319,7 +319,7 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
-        weight=-0.03,
+        weight=-0.05,
     )
 
     base_flat_orientation = RewTerm(
@@ -357,11 +357,11 @@ class RewardsCfg:
     #     weight=0,
     # )
 
-    # Center the hips
-    center_hips = RewTerm(
+    # Center the joints (which is a standing pos)
+    center_joints = RewTerm(
         func=mdp.center_joints_pos,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_joint"])},
-        weight=-0.01,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"])},
+        weight=-0.02,
     )
 
 
@@ -372,7 +372,7 @@ class RewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
             "threshold": 100.0,
         },  # at least 100N per foot
-        weight=-0.6,
+        weight=-1.0,
     )
     
     # feet_contacting_ground = RewTerm(
