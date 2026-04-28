@@ -147,7 +147,7 @@ def base_x_y_diff(
 def strict_desired_contacts_penalty(
     env, sensor_cfg: SceneEntityCfg, threshold: float = 1.0
 ) -> torch.Tensor:
-    """Penalize if any of the desired contacts are non-present."""
+    """1.0 if all of the non-desired contacts are present, 0.0 if none are, scales between"""
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     contacts = (
         contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :]  # type: ignore
@@ -155,11 +155,11 @@ def strict_desired_contacts_penalty(
         .max(dim=1)[0]
         > threshold
     )
-    all_contact = ~(contacts.all(dim=1))  # invert: True if any contact missing
+    all_contact = 1 - contacts.sum(dim=1)/contacts.shape[1]
 
     # print("[DEBUG] Strict desired contacts penalty:", all_contact, all_contact.shape)
 
-    return all_contact.float()
+    return all_contact
 
 def air_time_penalty(
     env,
