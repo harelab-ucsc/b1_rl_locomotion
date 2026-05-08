@@ -201,11 +201,11 @@ class ObservationsCfg:
         #     noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         # )
         
-        imu_lin_acc = ObsTerm(
-            func=mdp.imu_lin_acc,
-            params={"asset_cfg": SceneEntityCfg("imu_sensor")},
-            noise=AdditiveUniformNoiseCfg(n_min=-0.15, n_max=0.15),
-        )
+        # imu_lin_acc = ObsTerm(
+        #     func=mdp.imu_lin_acc,
+        #     params={"asset_cfg": SceneEntityCfg("imu_sensor")},
+        #     noise=AdditiveUniformNoiseCfg(n_min=-0.15, n_max=0.15),
+        # )
 
         # imu_ang_vel = ObsTerm(
         #     func=mdp.imu_ang_vel,
@@ -213,7 +213,7 @@ class ObservationsCfg:
         #     noise=AdditiveUniformNoiseCfg(n_min=-0.05, n_max=0.05),
         # )
 
-        last_action = ObsTerm(func=mdp.last_action)
+        # last_action = ObsTerm(func=mdp.last_action)
 
         # command
         # velocity_cmd = ObsTerm(
@@ -233,42 +233,12 @@ class EventCfg:
     """Configuration for events."""
 
     # reset
-    reset_L_hip_joints = EventTerm(
+    reset_joints = EventTerm(
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["[F,R]L_hip_joint"]),
-            "position_range": (-0.4, 0.4),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    reset_R_hip_joints = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["[F,R]R_hip_joint"]),
-            "position_range": (-0.4, 0.4),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    reset_thigh_joints = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_thigh_joint"]),
-            "position_range": (-1, 0.4),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    reset_calf_joints = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_calf_joint"]),
-            "position_range": (-0.4, 1.4),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["*_joint"]),
+            "position_range": (-0.25, 0.25),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -281,7 +251,7 @@ class EventCfg:
             "pose_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
-                "z": (0.0, 0.15),
+                "z": (0.0, 0.0),
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
                 # "roll": (-0.15, 0.15),
@@ -637,87 +607,6 @@ class CurriculumCfg:
     # C1 -> C2 settings
     ###########################################################
 
-    # joint_error = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "joint_error",
-    #         "w0": RewardSettings.c1.joint_error,
-    #         "w1": RewardSettings.c2.joint_error,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
-    # joint_error_fine = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "joint_error_fine",
-    #         "w0": RewardSettings.c1.joint_error_fine,
-    #         "w1": RewardSettings.c2.joint_error_fine,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
-    # base_height = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "base_height",
-    #         "w0": RewardSettings.c1.base_height,
-    #         "w1": RewardSettings.c2.base_height,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
-    # base_height_fine = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "base_height_fine",
-    #         "w0": RewardSettings.c1.base_height_fine,
-    #         "w1": RewardSettings.c2.base_height_fine,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
-    # base_lin_vel_z = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "base_lin_vel_z",
-    #         "w0": RewardSettings.c1.base_lin_vel_z,
-    #         "w1": RewardSettings.c2.base_lin_vel_z,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
-
-    # base_lin_vel_xy = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "base_lin_vel_xy",
-    #         "w0": RewardSettings.c1.base_lin_vel_xy,
-    #         "w1": RewardSettings.c2.base_lin_vel_xy,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
-    # base_flat_orientation = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "base_flat_orientation",
-    #         "w0": RewardSettings.c1.base_flat_orientation,
-    #         "w1": RewardSettings.c2.base_flat_orientation,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
-    # feet_air_time = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "feet_air_time",
-    #         "w0": RewardSettings.c1.feet_air_time,
-    #         "w1": RewardSettings.c2.feet_air_time,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
     feet_contacting_ground = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
@@ -728,27 +617,6 @@ class CurriculumCfg:
             "t1": CurriculumSettings.c2_1.end_step,
         },
     )
-
-    # hip_centering = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "hip_centering",
-    #         "w0": RewardSettings.c1.hip_centering,
-    #         "w1": RewardSettings.c2.hip_centering,
-    #         "t0": CurriculumSettings.c2.activation_step,
-    #         "t1": CurriculumSettings.c2.end_step,
-    #     },
-    # )
-    # soft_landing = CurrTerm(
-    #     func=mdp.lerp_reward_weight,
-    #     params={
-    #         "term_name": "soft_landing",
-    #         "w0": RewardSettings.c1.soft_landing,
-    #         "w1": RewardSettings.c2_1.soft_landing,
-    #         "t0": CurriculumSettings.c2_1.activation_step,
-    #         "t1": CurriculumSettings.c2_1.end_step,
-    #     },
-    # )
 
     joint_vel = CurrTerm(
         func=mdp.lerp_reward_weight,
