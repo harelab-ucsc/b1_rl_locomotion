@@ -5,10 +5,11 @@
 
 import math
 import numpy as np
+import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
-from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
@@ -238,7 +239,7 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=["*_joint"]),
-            "position_range": (-0.25, 0.25),
+            "position_range": (-0.1, 0.1),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -271,77 +272,6 @@ class EventCfg:
             },
         },
     )
-
-
-@configclass
-class EventCfg_PLAY(EventCfg):
-    """Configuration for events."""
-
-    # reset
-    reset_L_hip_joints = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["[F,R]L_hip_joint"]),
-            "position_range": (-0.026179, -0.026179),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    reset_R_hip_joints = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["[F,R]R_hip_joint"]),
-            "position_range": (0.026179, 0.026179),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    reset_thigh_joints = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_thigh_joint"]),
-            "position_range": (-0.7330382, -0.7330382),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    reset_calf_joints = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_calf_joint"]),
-            "position_range": (1.3788101, 1.3788101),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
-
-    reset_robot_pos = EventTerm(
-        func=mdp.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "pose_range": {
-                "x": (0.0, 0.0),
-                "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
-                "roll": (0.0, 0.0),
-                "pitch": (0.0, 0.0),
-                "yaw": (-math.pi, math.pi),
-            },
-            "velocity_range": {
-                "x": (0.0, 0.0),
-                "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
-                "roll": (0.0, 0.0),
-                "pitch": (0.0, 0.0),
-                "yaw": (0.0, 0.0),
-            },
-        },
-    )
-
 
 class RewardConstants:
     """Constants for rewards."""
@@ -386,26 +316,6 @@ class RewardSettings:
         # smoothness rewards
         joint_vel: float = -1e-5
         action_rt: float = -1e-3
-        # soft_landing: float = 1e-3
-
-    # curriculum 2 settings (after C1 -> C2)
-    class c2:
-        # increase joint error and laying down rewards
-        joint_error: float = -0.3
-        joint_error_fine: float = 0.5
-        base_height: float = -0.3
-        base_height_fine: float = 0.5
-        base_lin_vel_z: float = -0.08
-
-        # balancing rewards
-        base_lin_vel_xy: float = -0.12
-        base_flat_orientation: float = -3.0
-        feet_air_time: float = -0.8
-        feet_contacting_ground: float = -1.0
-
-        # hip_centering: float = 0.0  # turn off hip centering
-
-    # longer curriculum 2 term, meant for more strict penalties
     class c2_1:
         joint_vel: float = -5e-4
         action_rt: float = -0.1
@@ -582,21 +492,14 @@ class RewardsCfg:
 class CurriculumSettings:
     """Settings for curriculums."""
 
-    ###########################################################
-    # C1 -> C2: Keep balancing rewards roughly the same,
-    # but make laying down rewards more important.
-    #
-    # Activates: 500 steps
-    # Activation Duration: 1.5k steps
-    ###########################################################
-
-    class c2:
-        activation_step: int = 500
-        end_step: int = 1500
-
-    class c2_1(c2):
+    class c2_1:
         activation_step: int = 0
         end_step: int = 1500
+
+    class joint_pos_noise:
+        activation_step: int = 10000
+        n_min: float = -0.01
+        n_max: float = 0.01
 
 
 @configclass
@@ -707,12 +610,17 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
 
+    # Number of physics decimation steps to run after each reset, with the
+    # action manager holding default PD targets (no agent action). Lets the
+    # robot settle from its randomized reset state before the agent takes over.
+    num_reset_settle_steps: int = 10
+
     # Post initialization
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 5
+        self.episode_length_s = 10
         # viewer settings
         self.viewer.eye = (4.0, 0.0, 1.0)
         self.viewer.origin_type = "asset_root"
@@ -722,12 +630,17 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
         self.observations.policy.enable_corruption = True
+        # compensate episode length for settle steps (settle transitions are
+        # masked out of training, so without this the agent loses effective
+        # episode length)
+        self.episode_length_s += self.num_reset_settle_steps * self.decimation * self.sim.dt
 
 
 @configclass
 class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
-    events: EventCfg = EventCfg_PLAY()
     terminations: TerminationsCfg_PLAY = TerminationsCfg_PLAY()
+
+    num_reset_settle_steps = 0
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -736,9 +649,45 @@ class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
         self.viewer.origin_type = "world"
         self.viewer.env_index = 0
 
-        self.episode_length_s = 7
+        self.episode_length_s = 10
+        self.episode_length_s += self.num_reset_settle_steps * self.decimation * self.sim.dt
 
         # general settings
         self.scene.num_envs = 1
         # disable noise
         self.observations.policy.enable_corruption = True
+
+
+class B1RlLocomotionEnv(ManagerBasedRLEnv):
+    """ManagerBasedRLEnv with a per-env settle period after each reset.
+
+    For the first `cfg.num_reset_settle_steps` steps after an env resets, that
+    env's action is overridden with zeros (which the JointPositionAction maps
+    to default joint-position offsets when `use_default_offset=True`), so PD
+    holds the robot at its default pose while it settles. Each step's
+    transition validity is exposed in `extras["valid"]` (False during settle);
+    a mask-aware agent (see `MaskedPPO`) zeros out gradient contributions and
+    preprocessor updates from invalid transitions so settle steps don't
+    influence learning at all.
+    """
+
+    cfg: B1RlLocomotionEnvCfg
+
+    def __init__(self, cfg: B1RlLocomotionEnvCfg, **kwargs):
+        super().__init__(cfg, **kwargs)
+        self._settle_remaining = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+    def _reset_idx(self, env_ids: Sequence[int]):
+        super()._reset_idx(env_ids)
+        self._settle_remaining[env_ids] = self.cfg.num_reset_settle_steps
+
+    def step(self, action: torch.Tensor):
+        settling = self._settle_remaining > 0
+        if settling.any():
+            action = action.clone()
+            action[settling] = 0.0
+            self._settle_remaining[settling] -= 1
+
+        obs, reward, terminated, truncated, extras = super().step(action)
+        extras["valid"] = (~settling).view(-1, 1)
+        return obs, reward, terminated, truncated, extras

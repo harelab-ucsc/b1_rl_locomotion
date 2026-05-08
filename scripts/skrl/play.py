@@ -93,7 +93,7 @@ if version.parse(skrl.__version__) < version.parse(SKRL_VERSION):
     exit()
 
 if args_cli.ml_framework.startswith("torch"):
-    from skrl.utils.runner.torch import Runner
+    from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.agents.runner import B1Runner as Runner
 elif args_cli.ml_framework.startswith("jax"):
     from skrl.utils.runner.jax import Runner
 

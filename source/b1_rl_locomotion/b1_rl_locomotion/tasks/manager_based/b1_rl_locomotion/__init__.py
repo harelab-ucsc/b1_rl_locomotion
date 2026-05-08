@@ -15,7 +15,7 @@ from . import agents
 
 gym.register(
     id="B1-Rl-Locomotion-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point=f"{__name__}.b1_rl_locomotion_env_cfg:B1RlLocomotionEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.b1_rl_locomotion_env_cfg:B1RlLocomotionEnvCfg",
@@ -26,7 +26,7 @@ gym.register(
 
 gym.register(
     id="B1-Rl-Locomotion-v0-Play",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point=f"{__name__}.b1_rl_locomotion_env_cfg:B1RlLocomotionEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.b1_rl_locomotion_env_cfg:B1RlLocomotionEnvCfg_PLAY",
