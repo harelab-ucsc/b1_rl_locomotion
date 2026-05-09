@@ -7,6 +7,8 @@ import math
 import numpy as np
 import torch
 
+from typing import Sequence
+
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
