@@ -289,31 +289,38 @@ class RewardConstants:
     }
 
 
+    sitting_hip_joint_pos = {
+        k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
+        for k, v in {
+            "[F,R]R_hip_joint": -32.0,
+            "[F,R]L_hip_joint": 32.0,
+        }.items()
+    }
+
+
 class RewardSettings:
     """Settings for curriculums."""
 
     # constants
     class constant:
         termination: float = -5.0
-        # alive_bonus: float = 0.0
 
-    # curriculum 1 settings (initial)
     class c1:
-        # penalty / reward for laying down. Mostly turned off initially
-        joint_error: float = -0.2  # -5e-4
-        joint_error_fine: float = 0.2  # 5e-4
-        base_height: float = -0.2  # -5e-4
-        base_height_fine: float = 0.2  # 5e-4
-        base_lin_vel_z: float = -0.2  # -1e-2
+        joint_error: float = -0.2
+        hip_joint_error: float = -0.06
+        joint_error_fine: float = 0.2
+        hip_joint_error_fine: float = 0.06
+        base_height: float = -0.2
+        base_height_fine: float = 0.2
+        base_lin_vel_z: float = -0.3
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
         base_flat_orientation: float = -2.0
-        feet_air_time: float = -0.5  # -0.35
-        feet_contacting_ground: float = -0.1  # -0.05
+        feet_air_time: float = -0.5
+        feet_contacting_ground: float = -0.1
         soft_body_land: float = 0.3
         soft_feet_land: float = 0.1
-        # hip_centering: float = -0.1
 
         # smoothness rewards
         joint_vel: float = -1e-5
@@ -321,11 +328,7 @@ class RewardSettings:
     class c2_1:
         joint_vel: float = -5e-4
         action_rt: float = -0.1
-
         feet_contacting_ground: float = -0.3
-
-        # soft_landing: float = 0.1
-
 
 @configclass
 class RewardsCfg:
@@ -346,6 +349,14 @@ class RewardsCfg:
         },
         weight=RewardSettings.c1.joint_error,
     )
+    hip_joint_error = RewTerm(  # normal L2 squared penalty
+        func=mdp.joint_pos_target_error_l2,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*hip_joint"]),
+            "target": RewardConstants.sitting_hip_joint_pos,
+        },
+        weight=RewardSettings.c1.hip_joint_error,
+    )
     joint_error_fine = RewTerm(  # fine grained tanh reward
         func=mdp.joint_pos_target_error_l2,
         params={
@@ -354,6 +365,15 @@ class RewardsCfg:
             "use_tanh": True,
         },
         weight=RewardSettings.c1.joint_error_fine,
+    )
+    hip_joint_error_fine = RewTerm(  # fine grained tanh reward
+        func=mdp.joint_pos_target_error_l2,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*hip_joint"]),
+            "target": RewardConstants.sitting_hip_joint_pos,
+            "use_tanh": True,
+        },
+        weight=RewardSettings.c1.hip_joint_error_fine,
     )
 
     # base height tracking
@@ -544,6 +564,21 @@ class CurriculumCfg:
         },
     )
 
+    # turn on joint_pos_rel observation noise after a warmup phase, so the policy
+    # first learns on clean obs and then adapts to sensor noise
+    joint_pos_rel_noise = CurrTerm(
+        func=mdp.set_obs_term_noise,
+        params={
+            "group_name": "policy",
+            "term_name": "joint_pos_rel",
+            "noise_cfg": AdditiveUniformNoiseCfg(
+                n_min=CurriculumSettings.joint_pos_noise.n_min,
+                n_max=CurriculumSettings.joint_pos_noise.n_max,
+            ),
+            "activation_step": CurriculumSettings.joint_pos_noise.activation_step,
+        },
+    )
+
 
 @configclass
 class TerminationsCfg:
@@ -651,7 +686,7 @@ class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
         self.viewer.origin_type = "world"
         self.viewer.env_index = 0
 
-        self.episode_length_s = 10
+        self.episode_length_s = 5
         self.episode_length_s += self.num_reset_settle_steps * self.decimation * self.sim.dt
 
         # general settings

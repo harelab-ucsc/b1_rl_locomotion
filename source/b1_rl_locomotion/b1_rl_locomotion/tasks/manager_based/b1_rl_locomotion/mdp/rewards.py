@@ -106,17 +106,11 @@ def joint_pos_target_error_l2(
 
     robot: Articulation = env.scene[asset_cfg.name]
 
-    # convert desired joint positions to tensor
-    joint_names = robot.data.joint_names
-    # print("[DEBUG] joint_pos_target_error_l2: joint_names =", joint_names)
-    # # print joint positions in degrees
-    # print(
-    #     "[DEBUG] joint_pos_target_error_l2: joint_positions (degrees) =",
-    #     robot.data.joint_pos[:, : len(joint_names)] * (180.0 / 3.141592653589793),
-    # )
-
-    assert joint_names is not None, "joint_names must be specified in asset_cfg"
-    assert type(joint_names) is list, "joint_names must be a list of strings"
+    all_joint_names = robot.data.joint_names
+    if isinstance(asset_cfg.joint_ids, slice):
+        joint_names = list(all_joint_names)
+    else:
+        joint_names = [all_joint_names[i] for i in asset_cfg.joint_ids]
 
     # simple helper to find value from matching regex key in target
     def find_target_value(name: str) -> float:
