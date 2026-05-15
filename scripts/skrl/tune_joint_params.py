@@ -1,0 +1,749 @@
+"""Tune joint friction parameters by comparing simulation step response to real-world CSV data.
+
+Protocol:
+  - CSV rows 0-499:   joint held at cmd=0 (static hold)
+  - CSV rows 500-999: step command applied
+  - CSV rows 1000-:   joint commanded back to 0
+
+For each friction combination the script replays the CSV commands in simulation, records
+joint positions, and computes RMSE vs. the recorded data.  Results are saved to a CSV and
+three plots are generated: a top-5 trajectory overlay, a per-phase RMSE heatmap, and a
+best-fit single-trial plot.
+
+Parallelism (--num-envs N > 1):
+  Grid: evaluates N parameter combinations simultaneously in one sim run.
+  Anneal: generates N proposals per SA step and evaluates them in parallel,
+          moving to the best accepted proposal each step.
+"""
+
+import argparse
+
+import numpy as np
+from isaaclab.app import AppLauncher
+
+parser = argparse.ArgumentParser(description="Friction sweep for B1 joint step-response matching.")
+parser.add_argument("--joint", type=str, default="hip", choices=["hip", "thigh", "calf"],
+                    help="Which joint role to tune (CSV columns 0/1/2).")
+parser.add_argument("--leg", type=str, default="FR",
+                    choices=["FR", "FL", "RR", "RL"],
+                    help="Which leg to test on in simulation.")
+parser.add_argument("--csv-real", type=str, default="joint_data_aligned.csv",
+                    help="Real recorded CSV (relative to this script's directory).")
+parser.add_argument("--csv-out", type=str, default="tune_results.csv",
+                    help="Sweep results CSV (relative to this script's directory).")
+parser.add_argument("--plot-dir", type=str, default="tune_plots",
+                    help="Directory (relative to this script) for output plots.")
+
+parser.add_argument("--static-friction", type=str, default=",".join([f"{np.exp(i*0.18)-1:.1f}" for i in range(0,20,1)]),
+                    help="Comma-separated static friction values to sweep.")
+parser.add_argument("--dynamic-friction", type=str, default=",".join([f"{np.exp(i*0.18)-1:.1f}" for i in range(0,20,1)]),
+                    help="Comma-separated dynamic friction values to sweep.")
+parser.add_argument("--viscous-friction", type=str, default=",".join([f"{np.exp(i*0.18)-1:.1f}" for i in range(0,18,1)]),
+                    help="Comma-separated viscous friction values to sweep.")
+parser.add_argument("--armature", type=str, default="0.08",
+                    help="Comma-separated joint armature values to sweep.")
+parser.add_argument("--stiffness", type=str, default=",".join([f"{i:.1f}" for i in range(200,401,10)]),
+                    help="Comma-separated joint stiffness (P-gain) values to sweep.")
+parser.add_argument("--damping", type=str, default=",".join([f"{i:.1f}" for i in range(0,31,3)]),
+                    help="Comma-separated joint damping (D-gain) values to sweep.")
+
+parser.add_argument("--csv-hz", type=float, default=125.0,
+                    help="Recording rate of the real CSV (Hz); sets the sim timestep.")
+parser.add_argument("--static-rows", type=int, default=200,
+                    help="Number of CSV rows that form the static hold phase.")
+parser.add_argument("--step-rows", type=int, default=500,
+                    help="Number of CSV rows that form the step-response phase.")
+parser.add_argument("--no-gravity", action="store_true",
+                    help="Disable gravity (default: on; robot base is fixed so it won't fall).")
+parser.add_argument("--num-envs", type=int, default=1,
+                    help="Number of parallel robot instances. "
+                         "Grid: evaluates this many combos at once. "
+                         "Anneal: evaluates this many proposals per SA step. "
+                         "Recommended: 64-100 for fast sweeps.")
+# ── mode ──────────────────────────────────────────────────────────────────────
+parser.add_argument("--mode", type=str, default="grid", choices=["grid", "anneal"],
+                    help="Optimisation mode: grid sweep or simulated annealing.")
+parser.add_argument("--metric", type=str, default="total", choices=["step", "total"],
+                    help="RMSE metric to optimise: 'step' (step-response phase only) or 'total' (all phases).")
+parser.add_argument("--live-plot", action="store_true",
+                    help="[SA] Show a live trajectory plot updated each SA step (requires a display).")
+# SA-specific args (ignored in grid mode)
+parser.add_argument("--sa-steps", type=int, default=200,
+                    help="[SA] Number of SA iterations.")
+parser.add_argument("--sa-t0", type=float, default=0.05,
+                    help="[SA] Initial temperature (in RMSE units).")
+parser.add_argument("--sa-alpha", type=float, default=0.97,
+                    help="[SA] Geometric cooling factor applied each iteration.")
+parser.add_argument("--sa-sigma", type=str, default="0.1",
+                    help="[SA] Std-dev of Gaussian neighbour proposal. Either a single float "
+                         "(applied to all params) or 6 comma-separated floats: "
+                         "static,dynamic,viscous,armature,stiffness,damping.")
+parser.add_argument("--sa-init", type=str, default=None,
+                    help="[SA] Initial point as 'mu_s,mu_d,c_v,armature,stiffness,damping'. "
+                         "Defaults to the midpoint of each range.")
+parser.add_argument("--sa-bounds-static", type=str, default="0.0,50.0",
+                    help="[SA] lo,hi clamp for static friction (mu_s).")
+parser.add_argument("--sa-bounds-dynamic", type=str, default="0.0,50.0",
+                    help="[SA] lo,hi clamp for dynamic friction (mu_d).")
+parser.add_argument("--sa-bounds-viscous", type=str, default="0.0,50.0",
+                    help="[SA] lo,hi clamp for viscous friction (c_v).")
+parser.add_argument("--sa-bounds-armature", type=str, default="0.0,0.5",
+                    help="[SA] lo,hi clamp for armature.")
+parser.add_argument("--sa-bounds-stiffness", type=str, default="1.0,200.0",
+                    help="[SA] lo,hi clamp for stiffness (P-gain).")
+parser.add_argument("--sa-bounds-damping", type=str, default="0.1,20.0",
+                    help="[SA] lo,hi clamp for damping (D-gain).")
+parser.add_argument("--sa-seed", type=int, default=0,
+                    help="[SA] NumPy random seed.")
+AppLauncher.add_app_launcher_args(parser)
+args_cli = parser.parse_args()
+
+app_launcher = AppLauncher(args_cli)
+simulation_app = app_launcher.app
+
+# ── everything below runs after the sim app is up ────────────────────────────
+
+import csv
+import itertools
+import math
+import os
+import time
+
+import torch
+
+import isaaclab.sim as sim_utils
+from isaaclab.assets import Articulation
+from isaaclab.sim import SimulationContext
+
+from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_CFG  # noqa: E402
+
+JOINT_SUFFIX = {"hip": "hip_joint", "thigh": "thigh_joint", "calf": "calf_joint"}
+CSV_JOINT_IDX = {"hip": 0, "thigh": 1, "calf": 2}
+PHASE_STATIC = 0
+PHASE_STEP = 1
+PHASE_RETURN = 2
+
+
+def load_real_csv(path: str, joint_idx: int):
+    """Return (cmd, pos) as np.float32 arrays for the requested joint column."""
+    cmds, positions = [], []
+    with open(path, "r") as f:
+        for row in csv.DictReader(f):
+            cmds.append(float(row[f"cmd_{joint_idx}"]))
+            positions.append(float(row[f"pos_{joint_idx}"]))
+    return np.asarray(cmds, dtype=np.float32), np.asarray(positions, dtype=np.float32)
+
+
+def phase_mask(n: int, static: int, step: int):
+    """Return phase_ids int array of length n."""
+    ids = np.full(n, PHASE_RETURN, dtype=np.int8)
+    ids[:static] = PHASE_STATIC
+    ids[static: static + step] = PHASE_STEP
+    return ids
+
+
+def run_batch(
+    robot: Articulation,
+    sim: SimulationContext,
+    active_idx: int,
+    active_actuator,
+    active_local_idx: int,
+    cmd_tensor: torch.Tensor,
+    joint_offset: torch.Tensor,
+    dt: float,
+    params_list: list,
+    num_envs: int,
+    device: str,
+) -> torch.Tensor:
+    """Run len(params_list) parameter sets in parallel across num_envs robots.
+
+    cmd_tensor and returned positions are both in the relative frame (relative to
+    the default standing pose). joint_offset is the default absolute position of
+    the active joint, shape (num_envs,).
+
+    Returns sim joint positions (relative) with shape (len(params_list), T).
+    If the simulation stops early, the time dimension is truncated.
+    """
+    n_batch = len(params_list)
+    # Pad to num_envs so every robot is doing something (excess results are discarded)
+    padded = list(params_list)
+    if n_batch < num_envs:
+        padded += [params_list[0]] * (num_envs - n_batch)
+
+    # Reset all joints to the default standing pose (not zero)
+    robot.write_joint_state_to_sim(
+        robot.data.default_joint_pos.clone(),
+        robot.data.default_joint_vel.clone(),
+    )
+    robot.reset()
+
+    # Write per-robot friction, armature, stiffness, and damping parameters
+    for i, (mu_s, mu_d, c_v, arm, kp, kd) in enumerate(padded):
+        env_ids = torch.tensor([i], device=device, dtype=torch.long)
+        robot.write_joint_friction_coefficient_to_sim(
+            joint_friction_coeff=float(mu_s),
+            joint_dynamic_friction_coeff=float(mu_d),
+            joint_viscous_friction_coeff=float(c_v),
+            joint_ids=[active_idx],
+            env_ids=env_ids,
+        )
+        robot.write_joint_armature_to_sim(float(arm), joint_ids=[active_idx], env_ids=env_ids)
+        # For explicit actuators (DCMotor), stiffness/damping live on the actuator object,
+        # not on the PhysX drive. write_joint_stiffness_to_sim would enable a second
+        # position drive on top of the actuator torques, causing double control.
+        if active_actuator.is_implicit_model:
+            robot.write_joint_stiffness_to_sim(float(kp), joint_ids=[active_idx], env_ids=env_ids)
+            robot.write_joint_damping_to_sim(float(kd), joint_ids=[active_idx], env_ids=env_ids)
+        else:
+            active_actuator.stiffness[i, active_local_idx] = kp
+            active_actuator.damping[i, active_local_idx] = kd
+
+    n_steps = len(cmd_tensor)
+    # Start target at default pose; only the active joint changes each step
+    target = robot.data.default_joint_pos.clone()
+    sim_pos = torch.empty((num_envs, n_steps), device=device)
+
+    for t in range(n_steps):
+        # CSV command is relative → convert to absolute before sending
+        target[:, active_idx] = joint_offset + cmd_tensor[t]
+        robot.set_joint_position_target(target)
+        robot.write_data_to_sim()
+        sim.step()
+        robot.update(dt)
+        # Record position in the same relative frame as the CSV
+        sim_pos[:, t] = robot.data.joint_pos[:, active_idx] - joint_offset
+        if not simulation_app.is_running():
+            return sim_pos[:n_batch, :t]
+
+    return sim_pos[:n_batch]
+
+
+def compute_metrics(sim_pos: np.ndarray, real_pos: np.ndarray, phase_ids: np.ndarray):
+    """Return dict of RMSE/MAE/max-err per phase and total."""
+    out = {}
+    for label, code in [("static", PHASE_STATIC), ("step", PHASE_STEP),
+                        ("return", PHASE_RETURN), ("total", -1)]:
+        if code == -1:
+            mask = np.ones(len(sim_pos), dtype=bool)
+        else:
+            mask = phase_ids == code
+        err = sim_pos[mask] - real_pos[mask]
+        out[f"rmse_{label}"] = float(np.sqrt(np.mean(err ** 2)))
+        out[f"mae_{label}"] = float(np.mean(np.abs(err)))
+        out[f"max_err_{label}"] = float(np.max(np.abs(err)))
+    return out
+
+
+def main():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_in = os.path.join(script_dir, args_cli.csv_real)
+    csv_out_path = os.path.join(script_dir, args_cli.csv_out)
+    plot_dir = os.path.join(script_dir, args_cli.plot_dir)
+
+    joint_role = args_cli.joint
+    csv_idx = CSV_JOINT_IDX[joint_role]
+    print(f"[INFO] Loading real data from {csv_in} (joint {joint_role}, CSV col {csv_idx})")
+    cmd_real, pos_real = load_real_csv(csv_in, csv_idx)
+    n_steps = len(cmd_real)
+    phases = phase_mask(n_steps, args_cli.static_rows, args_cli.step_rows)
+    dt = 1.0 / args_cli.csv_hz
+    num_envs = args_cli.num_envs
+    print(f"[INFO] {n_steps} CSV rows at {args_cli.csv_hz} Hz "
+          f"-> {n_steps * dt:.2f} s replay, dt = {dt:.5f} s")
+    print(f"[INFO] Parallel environments: {num_envs}")
+
+    # ── sim setup ─────────────────────────────────────────────────────────────
+    gravity = (0.0, 0.0, 0.0) if args_cli.no_gravity else (0.0, 0.0, -9.81)
+    sim_cfg = sim_utils.SimulationCfg(dt=dt, device=args_cli.device or "cuda:0", gravity=gravity)
+    sim = SimulationContext(sim_cfg)
+    sim.set_camera_view(eye=[2.0, 2.0, 1.0], target=[0.0, 0.0, 0.5])
+
+    sim_utils.GroundPlaneCfg().func("/World/defaultGroundPlane", sim_utils.GroundPlaneCfg())
+    sim_utils.DomeLightCfg(intensity=2000.0).func("/World/Light", sim_utils.DomeLightCfg(intensity=2000.0))
+
+    # ── robot(s) ──────────────────────────────────────────────────────────────
+    # Fix the root link so the trunk is pinned in place (matches real hang-test setup).
+    fixed_spawn_cfg = B1_CFG.spawn.replace(
+        articulation_props=B1_CFG.spawn.articulation_props.replace(fix_root_link=True)
+    )
+
+    if num_envs > 1:
+        # Spawn N robots in a grid, then wrap them with one batched Articulation.
+        # asset_base.py skips spawning when cfg.spawn is None, so we pre-spawn manually.
+        cols = math.ceil(math.sqrt(num_envs))
+        spacing = 2.5  # metres between robots
+        for i in range(num_envs):
+            x = float(i % cols) * spacing
+            y = float(i // cols) * spacing
+            fixed_spawn_cfg.func(
+                f"/World/envs/env_{i}/Robot",
+                fixed_spawn_cfg,
+                translation=(x, y, 0.565),
+                orientation=B1_CFG.init_state.rot,
+            )
+        robot_cfg = B1_CFG.copy()
+        robot_cfg.prim_path = "/World/envs/env_.*/Robot"
+        robot_cfg.spawn = None  # prims already spawned above
+        robot = Articulation(robot_cfg)
+        print(f"[INFO] Spawned {num_envs} robots in a {cols}×{math.ceil(num_envs/cols)} grid.")
+    else:
+        robot_cfg = B1_CFG.copy()
+        robot_cfg.prim_path = "/World/Robot"
+        robot_cfg.spawn = fixed_spawn_cfg
+        robot = Articulation(robot_cfg)
+
+    sim.reset()
+    print("[INFO] Sim reset complete.")
+
+    joint_names = robot.data.joint_names
+    target_joint_name = f"{args_cli.leg}_{JOINT_SUFFIX[joint_role]}"
+    if target_joint_name not in joint_names:
+        raise ValueError(
+            f"Joint '{target_joint_name}' not found in articulation. "
+            f"Available: {joint_names}"
+        )
+    active_idx = joint_names.index(target_joint_name)
+    n_joints = len(joint_names)
+    device = str(sim.device)
+    # Default absolute position of the active joint — used to convert between
+    # relative (CSV) and absolute (sim) frames.
+    joint_offset = robot.data.default_joint_pos[:, active_idx].clone()
+    print(f"[INFO] Active joint: '{target_joint_name}' (idx {active_idx}), "
+          f"default offset = {joint_offset[0].item():.4f} rad")
+
+    # Find which actuator controls this joint (needed to set kp/kd correctly).
+    active_actuator = None
+    active_local_idx = None
+    for act in robot.actuators.values():
+        joint_indices_list = list(act.joint_indices)
+        if active_idx in joint_indices_list:
+            active_local_idx = joint_indices_list.index(active_idx)
+            active_actuator = act
+            break
+    if active_actuator is None:
+        raise ValueError(f"No actuator found for joint index {active_idx}")
+    print(f"[INFO] Actuator: {'implicit' if active_actuator.is_implicit_model else 'explicit'}, "
+          f"default kp={active_actuator.stiffness[0, active_local_idx].item():.1f}, "
+          f"kd={active_actuator.damping[0, active_local_idx].item():.1f}")
+
+    cost_key = f"rmse_{args_cli.metric}"
+    cmd_tensor = torch.tensor(cmd_real, dtype=torch.float32, device=device)
+    t_axis = np.arange(n_steps) * dt
+
+    # ── matplotlib setup ──────────────────────────────────────────────────────
+    try:
+        import matplotlib
+        if args_cli.live_plot and args_cli.mode == "anneal":
+            matplotlib.use("TkAgg")
+        else:
+            matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        _mpl_ok = True
+    except Exception:
+        plt = None
+        _mpl_ok = False
+
+    statics = [float(x) for x in args_cli.static_friction.split(",")]
+    dynamics = [float(x) for x in args_cli.dynamic_friction.split(",")]
+    viscouses = [float(x) for x in args_cli.viscous_friction.split(",")]
+    armatures = [float(x) for x in args_cli.armature.split(",")]
+    stiffnesses = [float(x) for x in args_cli.stiffness.split(",")]
+    dampings = [float(x) for x in args_cli.damping.split(",")]
+
+
+
+    os.makedirs(plot_dir, exist_ok=True)
+    # ── output CSV ────────────────────────────────────────────────────────────
+    metric_keys = [
+        "rmse_static", "mae_static", "max_err_static",
+        "rmse_step",   "mae_step",   "max_err_step",
+        "rmse_return", "mae_return", "max_err_return",
+        "rmse_total",  "mae_total",  "max_err_total",
+    ]
+    results_file = open(csv_out_path, "w", newline="")
+    writer = csv.writer(results_file)
+    extra_cols = ["iteration", "temperature", "accepted"] if args_cli.mode == "anneal" else []
+    writer.writerow(extra_cols + ["static_friction", "dynamic_friction", "viscous_friction", "armature", "stiffness", "damping"] + metric_keys)
+
+    all_results = []  # (params_tuple, sim_trace_np, metrics_dict)
+
+    def evaluate_batch(params_list: list):
+        """Run a batch of (mu_s, mu_d, c_v, arm) tuples in parallel.
+
+        Returns list of (sim_pos_np, metrics_dict) or (None, None) on early stop.
+        """
+        sim_pos_batch = run_batch(robot, sim, active_idx, active_actuator, active_local_idx,
+                                  cmd_tensor, joint_offset, dt, params_list, num_envs, device)
+        results = []
+        for i, params in enumerate(params_list):
+            traj = sim_pos_batch[i]
+            if traj.shape[0] < n_steps:
+                results.append((None, None))
+            else:
+                sp_np = traj.cpu().numpy()
+                metrics = compute_metrics(sp_np, pos_real, phases)
+                all_results.append((tuple(params), sp_np, metrics))
+                results.append((sp_np, metrics))
+        return results
+
+    t_start = time.monotonic()
+
+    # ── grid mode ─────────────────────────────────────────────────────────────
+    if args_cli.mode == "grid":
+        combos = [(s, d, v, a, kp, kd)
+                  for s, d, v, a, kp, kd in itertools.product(
+                      statics, dynamics, viscouses, armatures, stiffnesses, dampings)
+                  if d <= s]
+        n_batches = math.ceil(len(combos) / num_envs)
+        print(f"[INFO] Grid sweep: {len(combos)} combinations in {n_batches} batches of up to {num_envs}.")
+
+        done = False
+        total_done = 0
+        for batch_start in range(0, len(combos), num_envs):
+            chunk = combos[batch_start: batch_start + num_envs]
+            batch_results = evaluate_batch(list(chunk))
+
+            for params, (_, metrics) in zip(chunk, batch_results):
+                mu_s, mu_d, c_v, arm, kp, kd = params
+                total_done += 1
+                if metrics is None:
+                    print("[WARN] Trial cut short, stopping sweep.")
+                    done = True
+                    break
+                writer.writerow([mu_s, mu_d, c_v, arm, kp, kd] + [metrics[k] for k in metric_keys])
+                results_file.flush()
+                elapsed = time.monotonic() - t_start
+                eta = elapsed / total_done * (len(combos) - total_done)
+                print(f"[{total_done:3d}/{len(combos)}] mu_s={mu_s:.3g}  mu_d={mu_d:.3g}  c_v={c_v:.3g}  "
+                      f"arm={arm:.3g}  kp={kp:.3g}  kd={kd:.3g}  "
+                      f"rmse_step={metrics['rmse_step']:.4f}  "
+                      f"rmse_total={metrics['rmse_total']:.4f}  [{args_cli.metric}={metrics[cost_key]:.4f}]  "
+                      f"[{elapsed:.0f}s elapsed  ETA {eta:.0f}s]")
+            if done:
+                break
+
+    # ── simulated annealing mode ───────────────────────────────────────────────
+    else:
+        rng = np.random.default_rng(args_cli.sa_seed)
+        lo = np.array([float(x.split(",")[0]) for x in [
+            args_cli.sa_bounds_static, args_cli.sa_bounds_dynamic,
+            args_cli.sa_bounds_viscous, args_cli.sa_bounds_armature,
+            args_cli.sa_bounds_stiffness, args_cli.sa_bounds_damping]])
+        hi = np.array([float(x.split(",")[1]) for x in [
+            args_cli.sa_bounds_static, args_cli.sa_bounds_dynamic,
+            args_cli.sa_bounds_viscous, args_cli.sa_bounds_armature,
+            args_cli.sa_bounds_stiffness, args_cli.sa_bounds_damping]])
+
+        if args_cli.sa_init is not None:
+            cur = np.array([float(x) for x in args_cli.sa_init.split(",")], dtype=np.float64)
+            cur[1] = min(cur[1], cur[0])  # mu_d <= mu_s
+        else:
+            cur = np.array([
+                np.median(statics),
+                np.median(dynamics),
+                np.median(viscouses),
+                np.median(armatures),
+                np.median(stiffnesses),
+                np.median(dampings),
+            ], dtype=np.float64)
+
+        n_sa = args_cli.sa_steps
+        T = args_cli.sa_t0
+        sigma_vals = [float(x) for x in args_cli.sa_sigma.split(",")]
+        if len(sigma_vals) == 1:
+            sigma_vec = np.full(6, sigma_vals[0])
+        elif len(sigma_vals) == 6:
+            sigma_vec = np.array(sigma_vals)
+        else:
+            raise ValueError(f"--sa-sigma must be 1 or 6 comma-separated values, got {len(sigma_vals)}")
+
+        print(f"[INFO] Simulated annealing: {n_sa} steps, T0={T:.4f}, alpha={args_cli.sa_alpha}, "
+              f"sigma={sigma_vec.tolist()}, init={cur.tolist()}, {num_envs} proposals/step")
+
+        # Initial evaluation
+        init_results = evaluate_batch([tuple(cur)])
+        if init_results[0][1] is None:
+            print("[ERROR] Initial SA trial cut short.")
+            results_file.close()
+            return
+        cur_traj_np, cur_metrics = init_results[0]
+        cur_cost = cur_metrics[cost_key]
+        writer.writerow([0, T, True] + list(cur) + [cur_metrics[k] for k in metric_keys])
+        results_file.flush()
+
+        best_params = tuple(cur)
+        best_cost = cur_cost
+        best_metrics = cur_metrics
+
+        sa_history = [(0, T, cur_cost, cur_cost)]
+
+        print(f"[SA   0/{n_sa}] init  mu_s={cur[0]:.4f}  mu_d={cur[1]:.4f}  c_v={cur[2]:.4f}  "
+              f"arm={cur[3]:.4f}  kp={cur[4]:.4f}  kd={cur[5]:.4f}  cost={cur_cost:.4f}")
+
+        # ── live plot setup ───────────────────────────────────────────────────
+        live_line_sim = live_title = None
+        if args_cli.live_plot and _mpl_ok:
+            try:
+                plt.ion()
+                live_fig, live_ax = plt.subplots(figsize=(10, 5))
+                live_ax.plot(t_axis, pos_real, "k-", lw=2, label="real")
+                live_ax.plot(t_axis, cmd_real, "k:", lw=1, alpha=0.4, label="cmd")
+                live_line_sim, = live_ax.plot(t_axis, cur_traj_np, "r-", lw=1.5, label="sim (current)")
+                live_ax.set_xlabel("time (s)")
+                live_ax.set_ylabel("joint position (rad)")
+                live_ax.legend(fontsize=8)
+                live_ax.grid(True, alpha=0.3)
+                live_title = live_ax.set_title(
+                    f"SA 0/{n_sa} | T={T:.5f} | {cost_key}={cur_cost:.4f}")
+                live_fig.tight_layout()
+                live_fig.canvas.draw()
+                plt.pause(0.005)
+                print("[INFO] Live plot window opened.")
+            except Exception as e:
+                print(f"[WARN] Live plot unavailable: {e}")
+                live_line_sim = live_title = None
+
+        try:
+            for i in range(1, n_sa + 1):
+                if not simulation_app.is_running():
+                    break
+                # Generate num_envs proposals by perturbing current params
+                proposals = []
+                for _ in range(num_envs):
+                    p = np.clip(cur + rng.normal(0.0, sigma_vec), lo, hi)
+                    p[1] = min(p[1], p[0])  # mu_d <= mu_s
+                    proposals.append(tuple(p))
+
+                batch_results = evaluate_batch(proposals)
+
+                # Apply SA acceptance to each proposal independently;
+                # advance to the best accepted one for maximum exploration per step.
+                accepted_this_step = []
+                cut_short = False
+                for j, (proposal, (sp, metrics)) in enumerate(zip(proposals, batch_results)):
+                    if metrics is None:
+                        print("[WARN] SA trial cut short, stopping.")
+                        cut_short = True
+                        break
+                    prop_cost = metrics[cost_key]
+                    delta = prop_cost - cur_cost
+                    accept = delta < 0 or rng.random() < math.exp(-delta / max(T, 1e-12))
+                    writer.writerow([i, T, accept] + list(proposal) + [metrics[k] for k in metric_keys])
+                    if accept:
+                        accepted_this_step.append((proposal, prop_cost, metrics, sp))
+
+                if cut_short:
+                    break
+
+                results_file.flush()
+
+                if accepted_this_step:
+                    best_acc = min(accepted_this_step, key=lambda x: x[1])
+                    cur = np.array(best_acc[0])
+                    cur_cost = best_acc[1]
+                    cur_traj_np = best_acc[3]
+                    if cur_cost < best_cost:
+                        best_cost = cur_cost
+                        best_params = tuple(cur)
+                        best_metrics = best_acc[2]
+
+                sa_history.append((i, T, cur_cost, best_cost))
+                T *= args_cli.sa_alpha
+
+                n_acc = len(accepted_this_step)
+                elapsed = time.monotonic() - t_start
+                print(f"[SA {i:3d}/{n_sa}] acc {n_acc}/{num_envs}  "
+                      f"mu_s={cur[0]:.4f}  mu_d={cur[1]:.4f}  c_v={cur[2]:.4f}  "
+                      f"arm={cur[3]:.4f}  kp={cur[4]:.4f}  kd={cur[5]:.4f}  "
+                      f"cost={cur_cost:.4f}  best={best_cost:.4f}  T={T:.5f}  [{elapsed:.0f}s]")
+
+                if live_line_sim is not None:
+                    live_line_sim.set_ydata(cur_traj_np)
+                    live_title.set_text(
+                        f"SA {i}/{n_sa} | T={T:.5f} | {cost_key}={cur_cost:.4f} | best={best_cost:.4f}")
+                    live_fig.canvas.draw_idle()
+                    plt.pause(0.001)
+
+        except (KeyboardInterrupt, SystemExit):
+            print(f"\n[INFO] SA interrupted — generating plots from {len(all_results)} trials.")
+
+        best_params = tuple(float(x) for x in best_params)
+
+    results_file.close()
+    print(f"[INFO] Results written to {csv_out_path}")
+
+    # ── plots ─────────────────────────────────────────────────────────────────
+    if not _mpl_ok:
+        print("[WARN] matplotlib not available — skipping plots.")
+        return
+
+    sorted_by_step = sorted(all_results, key=lambda x: x[2][cost_key])
+    phase_ticks = [args_cli.static_rows * dt,
+                   (args_cli.static_rows + args_cli.step_rows) * dt]
+
+    def add_phase_lines(ax):
+        for x in phase_ticks:
+            ax.axvline(x, color="gray", lw=0.8, ls="--", alpha=0.7)
+        ax.axvspan(0, phase_ticks[0], alpha=0.04, color="blue", label="_static region")
+        ax.axvspan(phase_ticks[0], phase_ticks[1], alpha=0.04, color="green", label="_step region")
+
+    # ── 1. Top-5 trajectory overlay ──────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(11, 6))
+    ax.plot(t_axis, pos_real, "k-", lw=2.0, label="real", zorder=5)
+    ax.plot(t_axis, cmd_real, "k:", lw=1.0, alpha=0.45, label="command")
+    add_phase_lines(ax)
+    colors = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00"]
+    for rank, (params, trace, metrics) in enumerate(sorted_by_step[:5]):
+        ax.plot(t_axis, trace, lw=1.2, alpha=0.85, color=colors[rank],
+                label=(f"#{rank+1}  μs={params[0]:.2g}  μd={params[1]:.2g}  "
+                       f"cv={params[2]:.2g}  arm={params[3]:.2g}  "
+                       f"kp={params[4]:.2g}  kd={params[5]:.2g}  {cost_key}={metrics[cost_key]:.3f}"))
+    ax.set_xlabel("time (s)")
+    ax.set_ylabel("joint position (rad)")
+    ax.set_title(f"Top-5 friction combinations — {target_joint_name}")
+    ax.legend(loc="best", fontsize=8)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(os.path.join(plot_dir, f"top5_{joint_role}.png"), dpi=120)
+    plt.close(fig)
+    print(f"[INFO] Saved top5_{joint_role}.png")
+
+    # ── 2. RMSE-step heatmap — grid mode only ────────────────────────────────
+    if args_cli.mode == "grid":
+        rmse_grid = np.full((len(statics), len(dynamics)), np.inf)
+        best_cv_grid = np.zeros_like(rmse_grid)
+        for params, _, metrics in all_results:
+            i = statics.index(params[0])
+            j = dynamics.index(params[1])
+            if metrics[cost_key] < rmse_grid[i, j]:
+                rmse_grid[i, j] = metrics[cost_key]
+                best_cv_grid[i, j] = params[2]
+
+        fig, ax = plt.subplots(figsize=(max(6, len(dynamics) * 1.3), max(5, len(statics) * 1.1)))
+        im = ax.imshow(rmse_grid, origin="lower", aspect="auto", cmap="viridis_r")
+        ax.set_xticks(range(len(dynamics)))
+        ax.set_xticklabels([f"{v:.3g}" for v in dynamics])
+        ax.set_yticks(range(len(statics)))
+        ax.set_yticklabels([f"{v:.3g}" for v in statics])
+        ax.set_xlabel("dynamic friction μd")
+        ax.set_ylabel("static friction μs")
+        ax.set_title(f"{cost_key} (best viscous shown) — {target_joint_name}")
+        for i in range(len(statics)):
+            for j in range(len(dynamics)):
+                cell_color = "w" if rmse_grid[i, j] < (rmse_grid.max() + rmse_grid.min()) / 2 else "k"
+                ax.text(j, i,
+                        f"{rmse_grid[i, j]:.3f}\ncv={best_cv_grid[i,j]:.2g}",
+                        ha="center", va="center", color=cell_color, fontsize=7)
+        fig.colorbar(im, ax=ax, label="RMSE (rad)")
+        fig.tight_layout()
+        fig.savefig(os.path.join(plot_dir, f"heatmap_{joint_role}.png"), dpi=120)
+        plt.close(fig)
+        print(f"[INFO] Saved heatmap_{joint_role}.png")
+
+    # ── 3. Best-fit detailed trace ────────────────────────────────────────────
+    if args_cli.mode == "grid":
+        best_params, best_trace, best_metrics = sorted_by_step[0]
+    else:
+        _, best_trace, best_metrics = sorted_by_step[0]
+    fig, axes = plt.subplots(2, 1, figsize=(11, 7), sharex=True,
+                             gridspec_kw={"height_ratios": [3, 1]})
+    ax_pos, ax_err = axes
+
+    ax_pos.plot(t_axis, pos_real, "k-", lw=2.0, label="real")
+    ax_pos.plot(t_axis, cmd_real, "k:", lw=1.0, alpha=0.4, label="command")
+    ax_pos.plot(t_axis, best_trace, "r-", lw=1.5,
+                label=(f"sim  μs={best_params[0]:.3g}  μd={best_params[1]:.3g}  "
+                       f"cv={best_params[2]:.3g}  arm={best_params[3]:.3g}  "
+                       f"kp={best_params[4]:.3g}  kd={best_params[5]:.3g}"))
+    add_phase_lines(ax_pos)
+    ax_pos.set_ylabel("position (rad)")
+    ax_pos.set_title(f"Best fit — {target_joint_name}  "
+                     f"(rmse_step={best_metrics['rmse_step']:.4f}  "
+                     f"rmse_total={best_metrics['rmse_total']:.4f})")
+    ax_pos.legend(fontsize=8)
+    ax_pos.grid(True, alpha=0.3)
+
+    err_trace = best_trace - pos_real
+    ax_err.plot(t_axis, err_trace, color="darkorange", lw=1.0, label="sim − real")
+    ax_err.axhline(0, color="k", lw=0.6)
+    add_phase_lines(ax_err)
+    ax_err.set_xlabel("time (s)")
+    ax_err.set_ylabel("error (rad)")
+    ax_err.legend(fontsize=8)
+    ax_err.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(plot_dir, f"best_fit_{joint_role}.png"), dpi=120)
+    plt.close(fig)
+    print(f"[INFO] Saved best_fit_{joint_role}.png")
+
+    # ── 4. SA convergence plot ───────────────────────────────────────────────
+    if args_cli.mode == "anneal" and len(sa_history) > 1:
+        iters, temps, cur_costs, best_costs = zip(*sa_history)
+        fig, (ax_cost, ax_temp) = plt.subplots(2, 1, figsize=(10, 6), sharex=True,
+                                               gridspec_kw={"height_ratios": [3, 1]})
+        ax_cost.plot(iters, cur_costs, color="steelblue", lw=1.0, alpha=0.7, label="current RMSE")
+        ax_cost.plot(iters, best_costs, color="crimson", lw=1.5, label="best RMSE")
+        ax_cost.set_ylabel("step-phase RMSE (rad)")
+        ax_cost.set_title(f"SA convergence — {target_joint_name}")
+        ax_cost.legend(fontsize=8)
+        ax_cost.grid(True, alpha=0.3)
+        ax_temp.plot(iters, temps, color="darkorange", lw=1.0)
+        ax_temp.set_xlabel("SA iteration")
+        ax_temp.set_ylabel("temperature")
+        ax_temp.grid(True, alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(os.path.join(plot_dir, f"sa_convergence_{joint_role}.png"), dpi=120)
+        plt.close(fig)
+        print(f"[INFO] Saved sa_convergence_{joint_role}.png")
+
+    # ── grid-only: viscous-friction sensitivity for best (static, dynamic) ──
+    best_s, best_d = best_params[0], best_params[1]
+    visc_results = [(p[2], m["rmse_step"])
+                    for p, _, m in all_results if p[0] == best_s and p[1] == best_d]
+    if args_cli.mode == "grid" and len(visc_results) > 1:
+        visc_cv, visc_rmse = zip(*sorted(visc_results))
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.plot(visc_cv, visc_rmse, "o-", color="steelblue")
+        ax.set_xlabel("viscous friction cv")
+        ax.set_ylabel("RMSE step phase (rad)")
+        ax.set_title(f"Viscous sweep at μs={best_s:.3g} μd={best_d:.3g} — {target_joint_name}")
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(os.path.join(plot_dir, f"viscous_sweep_{joint_role}.png"), dpi=120)
+        plt.close(fig)
+        print(f"[INFO] Saved viscous_sweep_{joint_role}.png")
+
+    total_elapsed = time.monotonic() - t_start
+    print(f"\n[INFO] Total time: {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
+    print(f"\n[INFO] Best combination by {args_cli.metric} RMSE:")
+    print(f"  static_friction  = {best_params[0]}")
+    print(f"  dynamic_friction = {best_params[1]}")
+    print(f"  viscous_friction = {best_params[2]}")
+    print(f"  armature         = {best_params[3]}")
+    print(f"  stiffness (kp)   = {best_params[4]}")
+    print(f"  damping   (kd)   = {best_params[5]}")
+    print(f"  rmse_step  = {best_metrics['rmse_step']:.4f}")
+    print(f"  rmse_total = {best_metrics['rmse_total']:.4f}")
+    if args_cli.mode == "grid":
+        print(f"\n[INFO] Swept values:")
+        print(f"  static_friction:  {statics}")
+        print(f"  dynamic_friction: {dynamics}")
+        print(f"  viscous_friction: {viscouses}")
+        print(f"  armature:         {armatures}")
+        print(f"  stiffness (kp):   {stiffnesses}")
+        print(f"  damping   (kd):   {dampings}")
+
+
+if __name__ == "__main__":
+    main()
+    simulation_app.close()
+
+
+# results:
+# [SA  33/300] acc 460/500  mu_s=0.9452  mu_d=0.1148  c_v=2.0000  arm=0.1293  cost=0.0168  best=0.0168  T=0.08475
+# [SA  32/300] acc 464/500  mu_s=1.0086  mu_d=0.3116  c_v=2.0000  arm=0.2559  cost=0.0175  best=0.0175  T=0.08518
+# [SA  34/300] acc 459/500  mu_s=0.7708  mu_d=0.1778  c_v=2.0000  arm=0.1737  cost=0.0175  best=0.0168  T=0.08433
+# [SA  80/300] acc 463/500  mu_s=0.0000  mu_d=0.0000  c_v=1.9457  arm=0.0870  cost=0.0176  best=0.0168  T=0.06696
+# [SA  31/300] acc 469/500  mu_s=0.8517  mu_d=0.0989  c_v=2.0000  arm=0.1536  cost=0.0177  best=0.0177  T=0.08561
+# [SA  35/300] acc 455/500  mu_s=0.7990  mu_d=0.3977  c_v=1.9451  arm=0.1067  cost=0.0178  best=0.0168  T=0.08391

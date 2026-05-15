@@ -12,7 +12,7 @@ Reference:
 
 import isaaclab.sim as sim_utils
 
-from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg
+from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, IdealPDActuatorCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 import os
@@ -122,36 +122,59 @@ B1_CFG = ArticulationCfg(
     #     ),
     # },
     actuators={  # taken from URDF
-        "all": ImplicitActuatorCfg(
-            joint_names_expr=[".*"], stiffness=None, damping=None  # type: ignore
-        )
-        # "hips": ImplicitActuatorCfg(
+        # "all": ImplicitActuatorCfg(
+        #     joint_names_expr=[".*"], stiffness=None, damping=None  # type: ignore
+        # )
+        "hips": DCMotorCfg(
+            joint_names_expr=[".*_hip_joint"],
+            effort_limit=140.0,
+            saturation_effort=150.0,
+            velocity_limit=20,
+            stiffness=300.0,
+            damping=10.0,
+            friction=0.3,
+            armature=0.05
+        ),
+        "thighs": DCMotorCfg(
+            joint_names_expr=[".*_thigh_joint"],
+            effort_limit=140.0,
+            saturation_effort=150.0,
+            velocity_limit=20,
+            stiffness=430.0,
+            damping=15.0,
+            friction=0.3,
+            armature=0.05
+        ),
+        "calves": DCMotorCfg(
+            joint_names_expr=[".*_calf_joint"],
+            effort_limit=140.0,
+            saturation_effort=150.0,
+            velocity_limit=20,
+            stiffness=400.0,
+            damping=16.0,
+            friction=0.3,
+            armature=0.05
+        ),
+        # "hips": IdealPDActuatorCfg(
         #     joint_names_expr=[".*_hip_joint"],
-        #     # effort_limit_sim=91.0,
-        #     # saturation_effort=91.0,
-        #     # velocity_limit_sim=20,
-        #     stiffness=173.2,
-        #     damping=17.32,
+        #     stiffness=300.0,
+        #     damping=10.0,
+        #     armature=0.05,
+        #     friction=0.3
         # ),
-        # "thighs": ImplicitActuatorCfg(
+        # "thighs": IdealPDActuatorCfg(
         #     joint_names_expr=[".*_thigh_joint"],
-        #     # effort_limit_sim=93.33,
-        #     # saturation_effort=93.33,
-        #     # velocity_limit_sim=20,
-        #     stiffness=173.2,
-        #     damping=17.32,
+        #     stiffness=430.0,
+        #     damping=15.0,
+        #     armature=0.05,
+        #     friction=0.3
         # ),
-        # "calves": ImplicitActuatorCfg(
+        # "calves": IdealPDActuatorCfg(
         #     joint_names_expr=[".*_calf_joint"],
-        #     # effort_limit_sim=140.0,
-        #     # saturation_effort=140.0,
-        #     # velocity_limit_sim=20,
-        #     stiffness=173.2,
-        #     damping=17.32,
+        #     stiffness=400.0,
+        #     damping=16.0,
+        #     armature=0.05,
+        #     friction=0.3
         # ),
     },
 )
-
-"""
-Note: Check specifications from: https://www.trossenrobotics.com/a1-quadruped#specifications
-"""
