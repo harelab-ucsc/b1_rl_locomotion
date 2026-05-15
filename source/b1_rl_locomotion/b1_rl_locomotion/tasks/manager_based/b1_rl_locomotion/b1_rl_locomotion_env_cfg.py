@@ -57,7 +57,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot/b1_description/base",
         update_period=0.0,
         history_length=6,
-        debug_vis=True,
+        debug_vis=False,
         filter_prim_paths_expr=["/World/ground"],
     )
 
@@ -66,7 +66,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         update_period=0.0,
         history_length=6,
         force_threshold=0.0,
-        debug_vis=True,
+        debug_vis=False,
         filter_prim_paths_expr=["/World/ground"],
     )
 
@@ -76,14 +76,14 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         update_period=0.0,
         history_length=6,
         force_threshold=0.0,
-        debug_vis=True,
+        debug_vis=False,
     )
 
     imu_sensor = ImuCfg(
         prim_path="{ENV_REGEX_NS}/Robot/b1_description/base",
         history_length=6,
         update_period=0.0,
-        debug_vis=True,
+        debug_vis=False,
     )
 
     # lights
@@ -121,7 +121,7 @@ class ActionsCfg:
         use_default_offset=True,
         scale=1.0,
         preserve_order=True,  # keep on for model transfer
-        debug_vis=True,
+        debug_vis=False,
     )
 
 
@@ -142,7 +142,7 @@ class CommandCfg:
             yaw=(0, 0),
         ),
         resampling_time_range=(5.0, 5.0),
-        debug_vis=True,
+        debug_vis=False,
     )
 
 
@@ -275,6 +275,15 @@ class EventCfg:
         },
     )
 
+    randomize_joint_friction = EventTerm(
+        func=mdp.scale_joint_friction,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["*_joint"]),
+            "scale_range": (0.9, 1.1),
+        },
+    )
+
 class RewardConstants:
     """Constants for rewards."""
 
@@ -306,13 +315,13 @@ class RewardSettings:
         termination: float = -5.0
 
     class c1:
-        joint_error: float = -0.2
-        hip_joint_error: float = -0.06
-        joint_error_fine: float = 0.2
-        hip_joint_error_fine: float = 0.06
-        base_height: float = -0.2
-        base_height_fine: float = 0.2
-        base_lin_vel_z: float = -0.3
+        joint_error: float = -0.25
+        hip_joint_error: float = -0.09
+        joint_error_fine: float = 0.25
+        hip_joint_error_fine: float = 0.09
+        base_height: float = -0.25
+        base_height_fine: float = 0.25
+        base_lin_vel_z: float = -0.25
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
@@ -692,7 +701,7 @@ class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
         # general settings
         self.scene.num_envs = 1
         # disable noise
-        self.observations.policy.enable_corruption = True
+        self.observations.policy.enable_corruption = False
 
 
 class B1RlLocomotionEnv(ManagerBasedRLEnv):

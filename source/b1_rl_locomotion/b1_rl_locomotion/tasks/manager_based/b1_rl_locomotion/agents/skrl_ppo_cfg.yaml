@@ -67,7 +67,7 @@ agent:
   # logging and checkpoint
   experiment:
     directory: "stand_to_sit"
-    experiment_name: "run_32"
+    experiment_name: "run_33"
     write_interval: auto
     checkpoint_interval: auto
     wandb: True
