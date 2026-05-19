@@ -47,6 +47,11 @@ def scale_joint_friction(
     scale = torch.empty_like(base).uniform_(lo, hi)
     new_friction = (base * scale).clamp_(min=0.0)
 
+    # PhysX requires static >= dynamic friction; clamp to ensure the constraint holds.
+    dynamic_friction = asset.data.default_joint_dynamic_friction_coeff
+    dyn_base = dynamic_friction[env_ids[:, None], joint_ids_t[None, :]]
+    torch.maximum(new_friction, dyn_base, out=new_friction)
+
     asset.write_joint_friction_coefficient_to_sim(
         joint_friction_coeff=new_friction,
         joint_ids=write_joint_ids,

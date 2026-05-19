@@ -110,71 +110,43 @@ B1_CFG = ArticulationCfg(
         joint_vel={".*": 0.0},
     ),
     soft_joint_pos_limit_factor=1,
-    # actuators={
-    #     "base_legs": DCMotorCfg(
-    #         joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-    #         effort_limit= 1000, # 33.5
-    #         saturation_effort=1000, # 33.5
-    #         velocity_limit=21.0,
-    #         stiffness=240, # 25.0
-    #         damping=10, # 0.5
-    #         friction=0.0,
-    #     ),
-    # },
+
     actuators={  # taken from URDF
-        # "all": ImplicitActuatorCfg(
-        #     joint_names_expr=[".*"], stiffness=None, damping=None  # type: ignore
-        # )
         "hips": DCMotorCfg(
             joint_names_expr=[".*_hip_joint"],
             effort_limit=140.0,
             saturation_effort=150.0,
             velocity_limit=20,
+            friction=2.9,
+            dynamic_friction=0.0,
+            viscous_friction=7.6,
+            armature=0.08,
             stiffness=300.0,
             damping=10.0,
-            friction=0.3,
-            armature=0.05
         ),
         "thighs": DCMotorCfg(
             joint_names_expr=[".*_thigh_joint"],
             effort_limit=140.0,
             saturation_effort=150.0,
             velocity_limit=20,
+            friction=3.5,
+            dynamic_friction=3.4,
+            viscous_friction=11.0,
+            armature=0.3,
             stiffness=430.0,
-            damping=15.0,
-            friction=0.3,
-            armature=0.05
+            damping=10.0,
         ),
         "calves": DCMotorCfg(
             joint_names_expr=[".*_calf_joint"],
             effort_limit=140.0,
             saturation_effort=150.0,
             velocity_limit=20,
+            friction=3.5,
+            dynamic_friction=3.4,
+            viscous_friction=13.0,
+            armature=0.3,
             stiffness=400.0,
-            damping=16.0,
-            friction=0.3,
-            armature=0.05
+            damping=11.0,
         ),
-        # "hips": IdealPDActuatorCfg(
-        #     joint_names_expr=[".*_hip_joint"],
-        #     stiffness=300.0,
-        #     damping=10.0,
-        #     armature=0.05,
-        #     friction=0.3
-        # ),
-        # "thighs": IdealPDActuatorCfg(
-        #     joint_names_expr=[".*_thigh_joint"],
-        #     stiffness=430.0,
-        #     damping=15.0,
-        #     armature=0.05,
-        #     friction=0.3
-        # ),
-        # "calves": IdealPDActuatorCfg(
-        #     joint_names_expr=[".*_calf_joint"],
-        #     stiffness=400.0,
-        #     damping=16.0,
-        #     armature=0.05,
-        #     friction=0.3
-        # ),
     },
 )
