@@ -58,7 +58,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         update_period=0.0,
         history_length=6,
         debug_vis=False,
-        filter_prim_paths_expr=["/World/ground"],
+        # filter_prim_paths_expr=["/World/ground"],
     )
 
     contact_forces_thighs = ContactSensorCfg(
@@ -67,7 +67,7 @@ class B1RlLocomotionSceneCfg(InteractiveSceneCfg):
         history_length=6,
         force_threshold=0.0,
         debug_vis=False,
-        filter_prim_paths_expr=["/World/ground"],
+        # filter_prim_paths_expr=["/World/ground"],
     )
 
     contact_forces_feet = ContactSensorCfg(
