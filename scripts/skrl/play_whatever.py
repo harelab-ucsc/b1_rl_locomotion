@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -47,15 +47,17 @@ parser.add_argument(
     "--ml_framework",
     type=str,
     default="torch",
-    choices=["torch", "jax", "jax-numpy"],
+    choices=["torch", "jax"],
     help="The ML framework used for training the skrl agent.",
 )
 parser.add_argument(
     "--algorithm",
     type=str,
     default="PPO",
-    choices=["AMP", "PPO", "IPPO", "MAPPO"],
-    help="The RL algorithm used for training the skrl agent.",
+    help=(
+        "Name of the RL algorithm to use (e.g. AMP, DDPG, IPPO, MAPPO, PPO, SAC, TD3, etc.) "
+        "when several algorithms exist for the same task. For a more specific selection, use the argument --agent."
+    ),
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
 
@@ -75,18 +77,17 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import gymnasium as gym
 import os
 import random
 import time
-import torch
-from pprint import pprint
 
+import gymnasium as gym
 import skrl
+import torch
 from packaging import version
 
 # check for minimum supported skrl version
-SKRL_VERSION = "1.4.3"
+SKRL_VERSION = "2.0.0"
 if version.parse(skrl.__version__) < version.parse(SKRL_VERSION):
     skrl.logger.error(
         f"Unsupported skrl version: {skrl.__version__}. "
@@ -95,7 +96,7 @@ if version.parse(skrl.__version__) < version.parse(SKRL_VERSION):
     exit()
 
 if args_cli.ml_framework.startswith("torch"):
-    from skrl.utils.runner.torch import Runner
+    from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.agents.runner import B1Runner as Runner
 elif args_cli.ml_framework.startswith("jax"):
     from skrl.utils.runner.jax import Runner
 
@@ -107,9 +108,9 @@ from isaaclab.envs import (
     multi_agent_to_single_agent,
 )
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 from isaaclab_rl.skrl import SkrlVecEnvWrapper
+from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
@@ -210,10 +211,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
     print(f"[INFO] Loading model checkpoint from: {resume_path}")
     runner.agent.load(resume_path)
     # set agent to evaluation mode
-    runner.agent.set_running_mode("eval")
+    runner.agent.enable_training_mode(False, apply_to_models=True)
 
     # reset environment
     obs, _ = env.reset()
+    states = env.state()
     timestep = 0
     # simulate environment
     i = 0
@@ -249,12 +251,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
             #         0.0000, 0.0000, 9.8000,
             #        -0.1439, -0.0079, -0.7990, 0.0569, 0.4794, -0.6401, 0.1656, 0.6259, -0.6787, 0.2455, 0.2506, -0.6988]])
 
-            all_obs.append(obs[0].tolist())
+            # all_obs.append(obs[0].tolist())
 
-            outputs = runner.agent.act(obs, timestep=0, timesteps=0)
-
-            # print(runner.agent.policy)
-
+            outputs = runner.agent.act(obs, states, timestep=0, timesteps=0)
             # - multi-agent (deterministic) actions
             if hasattr(env, "possible_agents"):
                 actions = {a: outputs[-1][a].get("mean_actions", outputs[0][a]) for a in env.possible_agents}
@@ -262,21 +261,21 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
             else:
                 actions = outputs[-1].get("mean_actions", outputs[0])
 
-            # # MANUAL JOINTS OVERRIDE
-            # actions = torch.tensor([[
-            #     0, # FL_HIP
-            #     0, # FL_THIGH
-            #     0, # FL_CALF
-            #     0, # FR_HIP
-            #     0, # FR_THIGH
-            #     0, # FR_CALF
-            #     0, # RL_HIP
-            #     0, # RL_THIGH
-            #     0, # RL_CALF
-            #     0, # RR_HIP
-            #     0, # RR_THIGH
-            #     0, # RR_CALF
-            # ]])
+            # MANUAL JOINTS OVERRIDE
+            actions = torch.tensor([[
+                0.0, # FL_HIP
+                0.0, # FL_THIGH
+                0.0, # FL_CALF
+                0.0, # FR_HIP
+                0.0, # FR_THIGH
+                0.0, # FR_CALF
+                0.0, # RL_HIP
+                0.0, # RL_THIGH
+                0.0, # RL_CALF
+                0.0, # RR_HIP
+                0.0, # RR_THIGH
+                0.0, # RR_CALF
+            ]], device="cuda:0")
             # actions[0][target_joint_to_test] = 1
 
             # joint_order_list = ["FL_HIP  ", "FL_THIGH", "FL_CALF ", "FR_HIP  ", "FR_THIGH", "FR_CALF ", "RL_HIP  ", "RL_THIGH", "RL_CALF ", "RR_HIP  ", "RR_THIGH", "RR_CALF "]
@@ -291,21 +290,22 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
 
             # env stepping
             obs, _, _, _, _ = env.step(actions)
+            states = env.state()
         if args_cli.video:
             timestep += 1
             # exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
 
-        i += 1
-        if (i*dt > 3): 
-            # write all observations to a file
-            print("Writing all observations to all_obs.txt")
-            with open("all_obs.txt", "w") as f:
-                for obs in all_obs:
-                    f.write(",".join([str(o) for o in obs]) + "\n")
-            # exit the loop
-            break
+        # i += 1
+        # if (i*dt > 3): 
+        #     # write all observations to a file
+        #     print("Writing all observations to all_obs.txt")
+        #     with open("all_obs.txt", "w") as f:
+        #         for obs in all_obs:
+        #             f.write(",".join([str(o) for o in obs]) + "\n")
+        #     # exit the loop
+        #     break
 
         # time delay for real-time evaluation
         sleep_time = dt - (time.time() - start_time)

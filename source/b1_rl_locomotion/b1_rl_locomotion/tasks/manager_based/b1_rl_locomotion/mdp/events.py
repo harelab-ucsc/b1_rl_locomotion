@@ -12,6 +12,43 @@ from isaaclab.envs import ManagerBasedEnv
 from isaaclab.managers import SceneEntityCfg
 
 
+def reset_joints_to_pose(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    joint_pos_dict: dict[str, float],
+    position_noise_range: tuple[float, float] = (0.0, 0.0),
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset joints to specific absolute positions, independent of default_joint_pos.
+
+    Unlike reset_joints_by_offset, this ignores default_joint_pos entirely and writes
+    the given positions directly to sim. This lets the robot start in a different pose
+    (e.g. laying) while keeping the standing default for joint_pos_rel observations.
+
+    Args:
+        joint_pos_dict: Maps joint name patterns to target positions (radians).
+        position_noise_range: Uniform noise added to every joint position.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    device = asset.device
+
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device=device)
+
+    joint_pos = asset.data.default_joint_pos[env_ids].clone()
+
+    for name_pattern, target_pos in joint_pos_dict.items():
+        joint_ids, _ = asset.find_joints(name_pattern)
+        joint_pos[:, joint_ids] = target_pos
+
+    lo, hi = position_noise_range
+    if lo != hi or lo != 0.0:
+        joint_pos += torch.empty_like(joint_pos).uniform_(lo, hi)
+
+    joint_vel = torch.zeros_like(joint_pos)
+    asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+
+
 def scale_joint_friction(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor | None,

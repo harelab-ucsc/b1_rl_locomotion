@@ -5,13 +5,11 @@
 
 import math
 import numpy as np
-import torch
-
-from typing import Sequence
 
 import isaaclab.sim as sim_utils
+
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
-from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
+from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
@@ -23,7 +21,6 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg, ImuCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg
-from isaaclab.sensors import CameraCfg
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg
 
 from . import mdp
@@ -315,13 +312,13 @@ class RewardSettings:
         termination: float = -5.0
 
     class c1:
-        joint_error: float = -0.25
-        hip_joint_error: float = -0.09
-        joint_error_fine: float = 0.25
-        hip_joint_error_fine: float = 0.09
+        joint_error: float = -0.05
+        hip_joint_error: float = -0.05
+        joint_error_fine: float = 0.05
+        hip_joint_error_fine: float = 0.05
         base_height: float = -0.25
         base_height_fine: float = 0.25
-        base_lin_vel_z: float = -0.25
+        base_lin_vel_z: float = -0.3
 
         # balancing rewards
         base_lin_vel_xy: float = -0.1
@@ -661,6 +658,10 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
     # robot settle from its randomized reset state before the agent takes over.
     num_reset_settle_steps: int = 10
 
+    # Optional target joint positions (absolute, in radians) to hold during settle steps.
+    # None means hold at the default pose (action = zeros with use_default_offset=True).
+    settle_joint_pos: dict[str, float] | None = None
+
     # Post initialization
     def __post_init__(self) -> None:
         """Post initialization."""
@@ -669,13 +670,15 @@ class B1RlLocomotionEnvCfg(ManagerBasedRLEnvCfg):
         self.episode_length_s = 10
         # viewer settings
         self.viewer.eye = (4.0, 0.0, 1.0)
-        self.viewer.origin_type = "asset_root"
-        self.viewer.asset_name = "robot"
-        self.viewer.env_index = 42
+
         # simulation settings
         self.sim.dt = 1 / 120
         self.sim.render_interval = self.decimation
         self.observations.policy.enable_corruption = True
+
+        self.sim.physx.enable_external_forces_every_iteration = True
+        self.sim.physx.min_velocity_iteration_count = 1
+
         # compensate episode length for settle steps (settle transitions are
         # masked out of training, so without this the agent loses effective
         # episode length)
@@ -700,40 +703,6 @@ class B1RlLocomotionEnvCfg_PLAY(B1RlLocomotionEnvCfg):
 
         # general settings
         self.scene.num_envs = 1
-        # disable noise
         self.observations.policy.enable_corruption = False
 
 
-class B1RlLocomotionEnv(ManagerBasedRLEnv):
-    """ManagerBasedRLEnv with a per-env settle period after each reset.
-
-    For the first `cfg.num_reset_settle_steps` steps after an env resets, that
-    env's action is overridden with zeros (which the JointPositionAction maps
-    to default joint-position offsets when `use_default_offset=True`), so PD
-    holds the robot at its default pose while it settles. Each step's
-    transition validity is exposed in `extras["valid"]` (False during settle);
-    a mask-aware agent (see `MaskedPPO`) zeros out gradient contributions and
-    preprocessor updates from invalid transitions so settle steps don't
-    influence learning at all.
-    """
-
-    cfg: B1RlLocomotionEnvCfg
-
-    def __init__(self, cfg: B1RlLocomotionEnvCfg, **kwargs):
-        super().__init__(cfg, **kwargs)
-        self._settle_remaining = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
-
-    def _reset_idx(self, env_ids: Sequence[int]):
-        super()._reset_idx(env_ids)
-        self._settle_remaining[env_ids] = self.cfg.num_reset_settle_steps
-
-    def step(self, action: torch.Tensor):
-        settling = self._settle_remaining > 0
-        if settling.any():
-            action = action.clone()
-            action[settling] = 0.0
-            self._settle_remaining[settling] -= 1
-
-        obs, reward, terminated, truncated, extras = super().step(action)
-        extras["valid"] = (~settling).view(-1, 1)
-        return obs, reward, terminated, truncated, extras

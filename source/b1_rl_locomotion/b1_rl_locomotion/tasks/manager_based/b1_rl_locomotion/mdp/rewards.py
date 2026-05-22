@@ -139,7 +139,7 @@ def joint_pos_target_error_l2(
     diff = joint_pos - desired_pos
 
     error_l2_squared = (
-        diff.square().max(dim=1).values
+        diff.square().sum(dim=1)
     )  # maximum joint's squared L2 norm
 
     if use_tanh:
@@ -150,7 +150,7 @@ def joint_pos_target_error_l2(
         per_joint_reward = (1.0 - torch.tanh(abs_diff / tanh_scale)) ** 2  # [N, J]
 
         # take min tanh reward over joints
-        error_l2_tanh = per_joint_reward.min(dim=1).values  # [N]
+        error_l2_tanh = per_joint_reward.sum(dim=1)  # [N]
         return error_l2_tanh
 
     return error_l2_squared
