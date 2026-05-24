@@ -317,7 +317,7 @@ class RewardsCfg:
             "y": False,
             "z": True,
         },
-        weight=-0.4,
+        weight=-0.5,
     )
 
 
@@ -349,7 +349,25 @@ class RewardsCfg:
                 }.items()
             },
         },
-        weight=-0.1,
+        weight=-0.15,
+    )
+
+    joint_error_fine = RewTerm(
+        func=mdp.joint_pos_target_error_l2,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
+            "target": {
+                k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
+                for k, v in {
+                    "[F,R]R_hip_joint": -1.5,
+                    "[F,R]L_hip_joint": 1.5,
+                    ".*_thigh_joint": 42.0,
+                    ".*_calf_joint": -79.0,
+                }.items()
+            },
+            "use_tanh": True,
+        },
+        weight=0.15,
     )
 
     # Feet must be in contact with the ground
@@ -402,9 +420,9 @@ class CurriculumCfg:
         params={
             "term_name": "feet_contacting_ground",
             "w0": -0.1,
-            "w1": -0.4,
-            "t0": 2000,
-            "t1": 5000,
+            "w1": -0.5,
+            "t0": 3000,
+            "t1": 7000,
         },
     )
 
@@ -413,9 +431,9 @@ class CurriculumCfg:
         params={
             "term_name": "action_rt",
             "w0": -0.0015,
-            "w1": -0.015,
+            "w1": -0.02,
             "t0": 15000,
-            "t1": 16000,
+            "t1": 20000,
         },
     )
 
@@ -424,11 +442,46 @@ class CurriculumCfg:
         params={
             "term_name": "joint_vel",
             "w0": -0.00001,
-            "w1": -0.0002,
-            "t0": 18000,
-            "t1": 19000,
+            "w1": -0.001,
+            "t0": 20000,
+            "t1": 27000,
         },
     )
+
+    base_lin_vel_z = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "base_lin_vel_z",
+            "w0": -0.5,
+            "w1": -1.0,
+            "t0": 40000,
+            "t1": 45000,
+        },
+    )
+
+    feet_contacting_ground2 = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "feet_contacting_ground",
+            "w0": -0.5,
+            "w1": -1.5,
+            "t0": 50000,
+            "t1": 52000,
+        },
+    )
+
+
+    joint_vel2 = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "joint_vel",
+            "w0": -0.001,
+            "w1": -0.01,
+            "t0": 54000,
+            "t1": 55000,
+        },
+    )
+
 
 
 
