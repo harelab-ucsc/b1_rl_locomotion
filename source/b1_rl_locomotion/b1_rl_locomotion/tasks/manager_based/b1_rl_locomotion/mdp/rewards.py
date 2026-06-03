@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import sys
 import torch
 from typing import TYPE_CHECKING
 import re
@@ -17,6 +18,46 @@ from isaaclab.assets import RigidObject
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+
+
+def delayed(reward_func, delay_seconds: float):
+    """Wrap a reward function so it returns 0 for the first ``delay_seconds`` after each env's reset.
+
+    The wrapped function delegates to ``reward_func``, then multiplies the result by a
+    per-env mask that is 1 once ``env.episode_length_buf * env.step_dt >= delay_seconds``.
+
+    The wrapper is registered as an attribute on this module under a stable name
+    (``_delayed__<reward_func.__name__>__<delay>s``) so Hydra's ``string_to_callable``
+    can re-resolve it after serializing the cfg through a dict.
+
+    Usage:
+        my_reward = RewTerm(
+            func=mdp.delayed(mdp.base_height_from_command, delay_seconds=1.0),
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
+                    "command_name": "height"},
+            weight=-0.15,
+        )
+    """
+    inner_name = getattr(reward_func, "__name__", "reward")
+    # sanitize delay into a stable identifier suffix (e.g. 1.5 -> "1p5", -0.1 -> "n0p1")
+    delay_token = repr(delay_seconds).replace(".", "p").replace("-", "n")
+    wrapper_name = f"_delayed__{inner_name}__{delay_token}s"
+
+    module = sys.modules[__name__]
+    existing = getattr(module, wrapper_name, None)
+    if existing is not None:
+        return existing
+
+    def wrapped(env, **kwargs):
+        value = reward_func(env, **kwargs)
+        elapsed = env.episode_length_buf.to(value.dtype) * env.step_dt
+        mask = (elapsed >= delay_seconds).to(value.dtype)
+        return value * mask
+
+    wrapped.__name__ = wrapper_name
+    wrapped.__wrapped__ = reward_func
+    setattr(module, wrapper_name, wrapped)
+    return wrapped
 
 
 def base_height_from_command(
@@ -68,6 +109,37 @@ def base_height_from_command(
         return height_err_tanh
 
     return height_err_square
+
+
+def base_height_above_command(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Sparse reward for the base CoM reaching the commanded height.
+
+    Returns 1.0 for each env whose base center of mass is at or above the
+    commanded target height, and 0.0 otherwise.
+
+    Args:
+        env: The environment instance.
+        command_name: Name of the command to retrieve the target height from.
+        asset_cfg: Configuration for the asset to track.
+
+    Returns:
+        A per-environment tensor of shape [num_envs] with values in {0.0, 1.0}.
+    """
+    # Get pose command: [x, y, z, qx, qy, qz, qw]
+    command = env.command_manager.get_command(command_name)
+    robot: RigidObject = env.scene[asset_cfg.name]
+
+    # Desired height in base (body) frame
+    des_height = command[:, 2]
+
+    # Current CoM world height of the base (rigid body center of mass)
+    curr_height = robot.data.body_com_pose_w[:, asset_cfg.body_ids[0], 2]  # type: ignore
+
+    return (curr_height >= des_height).float()
 
 
 def joint_pos_target_error_l2(

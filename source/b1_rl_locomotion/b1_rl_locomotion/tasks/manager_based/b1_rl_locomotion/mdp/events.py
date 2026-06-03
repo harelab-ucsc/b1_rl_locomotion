@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import torch
 
-from isaaclab.assets import Articulation
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import ManagerBasedEnv
 from isaaclab.managers import SceneEntityCfg
 
@@ -94,3 +94,58 @@ def scale_joint_friction(
         joint_ids=write_joint_ids,
         env_ids=env_ids,
     )
+
+
+def randomize_body_material(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    static_friction_range: tuple[float, float] = (1.0, 1.0),
+    dynamic_friction_range: tuple[float, float] = (1.0, 1.0),
+    restitution_range: tuple[float, float] = (0.0, 0.0),
+    num_buckets: int = 64,
+    make_consistent: bool = True,
+):
+    """Randomize the contact material (friction/restitution) on the asset's collision shapes.
+
+    Plain-function variant of `mdp.randomize_rigid_body_material` (which is a class
+    and runs into instantiation-timing issues at startup/reset in this env). Samples
+    `num_buckets` (static_friction, dynamic_friction, restitution) combinations once
+    per call and randomly assigns one bucket to every collision shape of the asset.
+
+    Note: this randomizes ALL of the asset's shapes (matching `body_names=".*"`); the
+    `asset_cfg` body subset is not applied. PhysX only supports ~64000 unique materials,
+    so values are drawn from `num_buckets` buckets rather than per-shape.
+
+    Args:
+        static_friction_range: Uniform range for static friction.
+        dynamic_friction_range: Uniform range for dynamic friction.
+        restitution_range: Uniform range for restitution.
+        num_buckets: Number of unique material combinations to sample from.
+        make_consistent: If True, clamp dynamic friction <= static friction (PhysX constraint).
+    """
+    asset: Articulation | RigidObject = env.scene[asset_cfg.name]
+
+    # the physx material API works on CPU tensors
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device="cpu")
+    else:
+        env_ids = env_ids.cpu()
+
+    # sample `num_buckets` material combinations: columns are [static, dynamic, restitution]
+    ranges = torch.tensor(
+        [static_friction_range, dynamic_friction_range, restitution_range], device="cpu"
+    )
+    buckets = ranges[:, 0] + (ranges[:, 1] - ranges[:, 0]) * torch.rand(num_buckets, 3, device="cpu")
+
+    # PhysX requires dynamic friction <= static friction
+    if make_consistent:
+        buckets[:, 1] = torch.minimum(buckets[:, 0], buckets[:, 1])
+
+    # pull the current per-shape material buffer, overwrite the selected envs, write back
+    materials = asset.root_physx_view.get_material_properties()  # (num_envs, max_shapes, 3), CPU
+    total_num_shapes = materials.shape[1]
+    bucket_ids = torch.randint(0, num_buckets, (len(env_ids), total_num_shapes), device="cpu")
+    materials[env_ids] = buckets[bucket_ids]
+
+    asset.root_physx_view.set_material_properties(materials, env_ids)

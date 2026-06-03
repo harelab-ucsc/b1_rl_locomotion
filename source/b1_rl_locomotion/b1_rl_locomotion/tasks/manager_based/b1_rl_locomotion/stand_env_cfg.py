@@ -16,6 +16,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg, ImuCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg
+from isaaclab.sim.spawners import materials
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg
 
 from . import mdp
@@ -35,10 +36,28 @@ from b1_rl_locomotion.tasks.manager_based.b1_rl_locomotion.configs.b1 import B1_
 class B1StandSceneCfg(InteractiveSceneCfg):
     """Configuration for sitting to laying scene."""
 
-    # ground plane
+    # Old rigid collider, doesn't allow for randomized physical properties
+    # ground = AssetBaseCfg(
+    #     prim_path="/World/ground",
+    #     spawn=sim_utils.GroundPlaneCfg(size=(500.0, 500.0), 
+    #     physics_material=materials.RigidBodyMaterialCfg(),
+    #     init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),
+    # )
+
+
+    # ground plane with friction
     ground = AssetBaseCfg(
         prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(size=(500.0, 500.0)),
+        spawn=sim_utils.GroundPlaneCfg(
+            size=(500.0, 500.0),
+            physics_material=materials.RigidBodyMaterialCfg(
+                static_friction=0.6,          # URDF-intent foot-on-ground reference
+                dynamic_friction=0.6,
+                restitution=0.0,              # no bounce
+                friction_combine_mode="average",
+                restitution_combine_mode="average",
+            ),
+        ),
         init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),
     )
 
@@ -265,6 +284,27 @@ class EventCfg:
         },
     )
 
+    # Sim2real friction randomization: vary the robot's contact material. The
+    # ground is a fixed 0.6 reference surface; randomizing the foot side gives an
+    # effective (averaged) foot-on-ground friction spread of ~0.5-0.7.
+    # body_names=".*" matches the official locomotion recipe and guarantees the
+    # ground-contacting collider is covered (this URDF lumps the foot collision
+    # into the calf body, so targeting only ".*_foot" could miss it).
+    randomize_foot_friction = EventTerm(
+        # plain-function variant (mdp.randomize_rigid_body_material is a class-based
+        # term that hits instantiation-timing issues in this env; see events.py).
+        func=mdp.randomize_body_material,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.4, 0.8),
+            "dynamic_friction_range": (0.4, 0.8),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 64,
+            "make_consistent": True,          # keep dynamic <= static
+        },
+    )
+
 
 @configclass
 class RewardsCfg:
@@ -392,6 +432,17 @@ class RewardsCfg:
         weight=-0.0015,
     )
 
+    foot_slip = RewTerm(
+        func=mdp.foot_slip_penalty,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=[".*foot"]),
+            "contact_threshold": 10.0,
+            "slip_threshold": 0.1,
+        },
+        weight=0.0
+    )
+
     terminating = RewTerm(func=mdp.is_terminated, weight=-5.0)
 
 
@@ -479,6 +530,18 @@ class CurriculumCfg:
             "w1": -0.01,
             "t0": 54000,
             "t1": 55000,
+        },
+    )
+
+
+    foot_slip = CurrTerm(
+        func=mdp.lerp_reward_weight,
+        params={
+            "term_name": "foot_slip",
+            "w0": 0.0,
+            "w1": -0.15,
+            "t0": 1,
+            "t1": 2,
         },
     )
 

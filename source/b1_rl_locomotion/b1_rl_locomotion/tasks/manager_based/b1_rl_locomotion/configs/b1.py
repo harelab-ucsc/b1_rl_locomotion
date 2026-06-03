@@ -111,7 +111,7 @@ B1_CFG = ArticulationCfg(
     ),
     soft_joint_pos_limit_factor=1,
 
-    actuators={  # taken from URDF
+    actuators={
         "hips": DCMotorCfg(
             joint_names_expr=[".*_hip_joint"],
             effort_limit=140.0,
