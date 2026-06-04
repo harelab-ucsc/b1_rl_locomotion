@@ -275,6 +275,15 @@ class EventCfg:
         },
     )
 
+    randomize_robot_mass = EventTerm(
+        func=mdp.randomize_body_mass,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "mass_scale_range": (0.8, 1.2),
+        },
+    )
+
     randomize_joint_friction = EventTerm(
         func=mdp.scale_joint_friction,
         mode="reset",

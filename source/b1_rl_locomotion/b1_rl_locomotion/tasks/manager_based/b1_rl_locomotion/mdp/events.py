@@ -96,6 +96,42 @@ def scale_joint_friction(
     )
 
 
+def randomize_body_mass(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    mass_scale_range: tuple[float, float] = (0.8, 1.2),
+):
+    """Scale each body's mass by a per-env uniform factor and recompute inertia.
+
+    Plain-function variant of `mdp.randomize_rigid_body_mass` (which is class-based
+    and can hit instantiation-timing issues). Applies the same scale factor to every
+    body in the asset for a given environment so mass ratios are preserved.
+    """
+    asset: Articulation | RigidObject = env.scene[asset_cfg.name]
+
+    if env_ids is None:
+        env_ids = torch.arange(env.scene.num_envs, device="cpu")
+    else:
+        env_ids = env_ids.cpu()
+
+    lo, hi = mass_scale_range
+    # one scale per env, applied uniformly across all bodies
+    scale = torch.empty(len(env_ids), 1, device="cpu").uniform_(lo, hi)
+
+    masses = asset.root_physx_view.get_masses()  # (num_envs, num_bodies), CPU
+    default_masses = asset.data.default_mass.cpu()
+    masses[env_ids] = default_masses[env_ids] * scale
+    masses = torch.clamp(masses, min=1e-6)
+    asset.root_physx_view.set_masses(masses, env_ids)
+
+    # recompute inertia proportionally so dynamics stay consistent
+    inertias = asset.root_physx_view.get_inertias()  # (num_envs, num_bodies, 9)
+    default_inertias = asset.data.default_inertia.cpu()
+    inertias[env_ids] = default_inertias[env_ids] * scale[..., None]
+    asset.root_physx_view.set_inertias(inertias, env_ids)
+
+
 def randomize_body_material(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor | None,

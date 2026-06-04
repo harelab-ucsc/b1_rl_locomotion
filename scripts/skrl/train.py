@@ -79,6 +79,7 @@ simulation_app = app_launcher.app
 import logging
 import os
 import random
+import shutil
 import time
 from datetime import datetime
 
@@ -184,6 +185,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
     dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
+    # save a copy of the env cfg source file to preserve reward weights
+    _env_cfg_src = os.path.join(
+        os.path.dirname(__file__),
+        "../../source/b1_rl_locomotion/b1_rl_locomotion/tasks/manager_based/b1_rl_locomotion/stand_env_cfg.py",
+    )
+    shutil.copy(os.path.abspath(_env_cfg_src), os.path.join(log_dir, "params", "mtrl_b1_env_cfg.py"))
 
     # get checkpoint path (to resume training)
     resume_path = retrieve_file_path(args_cli.checkpoint) if args_cli.checkpoint else None
