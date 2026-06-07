@@ -15,6 +15,7 @@ from __future__ import annotations
 import itertools
 from typing import Any, Mapping, Optional
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -32,6 +33,27 @@ class MaskedPPO(PPO):
         if self.memory is not None:
             self.memory.create_tensor(name="valid", size=1, dtype=torch.bool)
             self._tensors_names = [*self._tensors_names, "valid"]
+
+    def write_tracking_data(self, *, timestep: int, timesteps: int) -> None:
+        # skrl 2.x logs scalars only through its own skrl.utils.tensorboard.SummaryWriter,
+        # which wandb's sync_tensorboard monkeypatch never intercepts (it only patches the
+        # tensorboard/torch/tensorboardX writer modules). The result is a wandb run with
+        # nothing but system stats. Push the reduced scalars to wandb directly here,
+        # mirroring the base reduction (min/max/mean), before super() clears the buffers.
+        import wandb
+
+        if wandb.run is not None and self.tracking_data:
+            data = {}
+            for k, v in self.tracking_data.items():
+                if k.endswith("(min)"):
+                    data[k] = np.min(v)
+                elif k.endswith("(max)"):
+                    data[k] = np.max(v)
+                else:
+                    data[k] = np.mean(v)
+            wandb.log(data, step=timestep)
+
+        super().write_tracking_data(timestep=timestep, timesteps=timesteps)
 
     def record_transition(
         self,
@@ -113,6 +135,9 @@ class MaskedPPO(PPO):
         cumulative_policy_loss = 0
         cumulative_entropy_loss = 0
         cumulative_value_loss = 0
+        cumulative_kl = 0
+        cumulative_clip_fraction = 0
+        num_minibatches = 0
 
         # learning epochs
         for epoch in range(self.cfg.learning_epochs):
@@ -171,6 +196,10 @@ class MaskedPPO(PPO):
 
                     # policy loss (mask out invalid samples)
                     ratio = torch.exp(next_log_prob - sampled_log_prob)
+                    # fraction of valid samples whose ratio hit the clip bound
+                    with torch.no_grad():
+                        clipped = (torch.abs(ratio - 1.0) > self.cfg.ratio_clip).to(valid_mask.dtype)
+                        clip_fraction = (clipped * valid_mask).sum() / valid_count
                     surrogate = sampled_advantages * ratio
                     surrogate_clipped = sampled_advantages * torch.clip(
                         ratio, 1.0 - self.cfg.ratio_clip, 1.0 + self.cfg.ratio_clip
@@ -214,6 +243,9 @@ class MaskedPPO(PPO):
                 cumulative_value_loss += value_loss.item()
                 if self.cfg.entropy_loss_scale:
                     cumulative_entropy_loss += entropy_loss.item()
+                cumulative_kl += kl_divergence.item()
+                cumulative_clip_fraction += clip_fraction.item()
+                num_minibatches += 1
 
             # update learning rate
             if self.scheduler:
@@ -238,6 +270,20 @@ class MaskedPPO(PPO):
             )
 
         self.track_data("Policy / Standard deviation", self.policy.distribution(role="policy").stddev.mean().item())
+
+        # approximate KL divergence and policy clip ratio (averaged over minibatches)
+        if num_minibatches:
+            self.track_data("Policy / Approximate KL", cumulative_kl / num_minibatches)
+            self.track_data("Policy / Clip ratio", cumulative_clip_fraction / num_minibatches)
+
+        # explained variance of the value model: 1 - Var(returns - values) / Var(returns),
+        # computed over valid samples (values/returns share the same value-preprocessor scale)
+        with torch.no_grad():
+            y_pred = self.memory.get_tensor_by_name("values").reshape(-1, 1)[valid_flat]
+            y_true = self.memory.get_tensor_by_name("returns").reshape(-1, 1)[valid_flat]
+            var_y = y_true.var()
+            explained_variance = float("nan") if var_y == 0 else (1.0 - (y_true - y_pred).var() / var_y).item()
+        self.track_data("Value / Explained variance", explained_variance)
 
         if self.scheduler:
             self.track_data("Learning / Learning rate", self.scheduler.get_last_lr()[0])

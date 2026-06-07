@@ -288,7 +288,7 @@ class EventCfg:
         func=mdp.scale_joint_friction,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["*_joint"]),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_joint"]),
             "scale_range": (0.9, 1.1),
         },
     )

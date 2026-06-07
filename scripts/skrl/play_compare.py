@@ -182,6 +182,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
     experiment_cfg["trainer"]["close_environment_at_exit"] = False
     experiment_cfg["agent"]["experiment"]["write_interval"] = 0
     experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0
+    experiment_cfg["agent"]["experiment"]["wandb"] = False  # don't log to wandb
 
     runner1 = Runner(env, experiment_cfg)
     runner2 = Runner(env, copy.deepcopy(experiment_cfg))

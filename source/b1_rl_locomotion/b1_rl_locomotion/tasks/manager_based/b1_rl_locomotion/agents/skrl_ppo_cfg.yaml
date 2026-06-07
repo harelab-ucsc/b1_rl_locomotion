@@ -69,6 +69,11 @@ agent:
     write_interval: auto
     checkpoint_interval: auto
     wandb: True
+    # MaskedPPO logs scalars to wandb directly (see write_tracking_data); skrl 2.x's
+    # custom SummaryWriter defeats wandb's sync_tensorboard, so disable it to keep the
+    # direct path the single source of truth and avoid wandb step bookkeeping conflicts.
+    wandb_kwargs:
+      sync_tensorboard: False
 
 
 # Sequential trainer

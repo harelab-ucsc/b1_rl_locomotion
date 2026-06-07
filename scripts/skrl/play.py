@@ -204,6 +204,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, expe
     experiment_cfg["trainer"]["close_environment_at_exit"] = False
     experiment_cfg["agent"]["experiment"]["write_interval"] = 0  # don't log to TensorBoard
     experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0  # don't generate checkpoints
+    experiment_cfg["agent"]["experiment"]["wandb"] = False  # don't log to wandb
     runner = Runner(env, experiment_cfg)
 
     print(f"[INFO] Loading model checkpoint from: {resume_path}")
