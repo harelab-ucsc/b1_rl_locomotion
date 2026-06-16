@@ -148,6 +148,8 @@ def joint_pos_target_error_l2(
     target: dict[str, float],
     use_tanh: bool = False,  # when True, applies tanh to height error (becomes a reward instead of a penalty)
     tanh_scale: float = 0.5,  # d/dx f(x) = -1 at around x=20deg(~0.35rad) if scale=0.5, where f(x)= (1-tanh(err / scale)^2
+    start_target: dict[str, float] | None = None,  # if set, ramp desired pose from this (prone) pose to `target`
+    ramp_duration: float = 5.0,  # seconds over which the desired pose ramps start_target -> target
 ) -> torch.Tensor:
     """
     Joint-position tracking penalty or reward.
@@ -198,6 +200,25 @@ def joint_pos_target_error_l2(
         [find_target_value(n) for n in joint_names], device=env.device
     )
     desired_pos = desired_pos_single.unsqueeze(0).repeat(env.num_envs, 1)
+
+    # optionally ramp the desired pose from a start (prone) pose up to `target`
+    # over `ramp_duration` seconds of episode time, so the policy tracks a slowly
+    # changing joint setpoint instead of being rewarded for snapping to standing.
+    if start_target is not None:
+        start_pos_single = torch.tensor(
+            [
+                next(v for k, v in start_target.items() if re.match(k, n))
+                for n in joint_names
+            ],
+            device=env.device,
+        )
+        phase = torch.clamp(
+            env.episode_length_buf.float() * env.step_dt / ramp_duration, 0.0, 1.0
+        )  # [N]
+        # desired = start + phase * (end - start), broadcast over joints
+        desired_pos = start_pos_single.unsqueeze(0) + phase.unsqueeze(1) * (
+            desired_pos - start_pos_single.unsqueeze(0)
+        )
 
     # print("[DEBUG] joint_pos_target_error_l2: desired_pos.shape =", desired_pos.shape)
 
@@ -255,6 +276,22 @@ def body_lin_vel_l2(
     lin_vel_l2 = torch.norm(lin_vel, dim=1)
 
     return lin_vel_l2
+
+
+def body_lin_vel_down(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """
+    Penalize *downward* (negative) z linear velocity only; upward motion is free.
+    Returns the squared downward speed (positive), zero when moving up or still.
+    """
+    robot: RigidObject = env.scene[asset_cfg.name]
+
+    vel_z = robot.data.root_state_w[:, 9]  # z linear velocity
+    down_speed = (-vel_z).clamp(min=0.0)  # downward magnitude, 0 if moving up
+
+    return down_speed.square()
 
 
 def center_joints_pos(

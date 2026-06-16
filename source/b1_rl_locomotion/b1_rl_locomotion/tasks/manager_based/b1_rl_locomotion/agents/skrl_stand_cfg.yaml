@@ -23,7 +23,7 @@ models:
     clip_actions: False
     network:
       - name: net
-        input: OBSERVATIONS
+        input: STATES  # privileged critic obs (the "critic" observation group)
         layers: [512, 256, 128, 64]
         activations: elu
     output: ONE
@@ -40,17 +40,19 @@ memory:
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
   class: PPO
-  rollouts: 64
-  learning_epochs: 16
+  rollouts: 24
+  learning_epochs: 5
   mini_batches: 4
-  discount_factor: 0.9
+  discount_factor: 0.99
   gae_lambda: 0.95
-  learning_rate: 3.0e-03
+  learning_rate: 1.0e-03
   learning_rate_scheduler: KLAdaptiveLR
   learning_rate_scheduler_kwargs:
     kl_threshold: 0.012 # 0.01, 0.008
   observation_preprocessor: RunningStandardScaler
   observation_preprocessor_kwargs: null
+  state_preprocessor: RunningStandardScaler  # normalize privileged critic states
+  state_preprocessor_kwargs: null
   value_preprocessor: RunningStandardScaler
   value_preprocessor_kwargs: null
   random_timesteps: 0
@@ -58,14 +60,14 @@ agent:
   grad_norm_clip: 1.0
   ratio_clip: 0.25
   value_clip: 0.25
-  entropy_loss_scale: 0.01
-  value_loss_scale: 2.0
+  entropy_loss_scale: 0.005
+  value_loss_scale: 1.0
   kl_threshold: 0.0
   time_limit_bootstrap: False
   # logging and checkpoint
   experiment:
     directory: "sit_to_stand"
-    experiment_name: "run_3"
+    experiment_name: "run_4"
     write_interval: auto
     checkpoint_interval: auto
     wandb: True
@@ -80,5 +82,5 @@ agent:
 # https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
 trainer:
   class: SequentialTrainer
-  timesteps: 100000
+  timesteps: 70000
   environment_info: log

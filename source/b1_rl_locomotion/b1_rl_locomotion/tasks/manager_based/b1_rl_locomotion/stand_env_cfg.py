@@ -111,6 +111,28 @@ class B1StandSceneCfg(InteractiveSceneCfg):
 # MDP settings
 ##
 
+# Prone / laying-down joint pose the robot is reset into each episode. Single source
+# of truth, reused by the reset event, the post-reset settle hold, and the ramped
+# joint-tracking reward (as the start of the prone -> standing trajectory).
+PRONE_JOINT_POS: dict[str, float] = {
+    "FR_hip_joint":   -0.558384,
+    "FR_thigh_joint":  1.078270,
+    "FR_calf_joint":  -2.751709,
+    "FL_hip_joint":    0.534135,
+    "FL_thigh_joint":  1.089023,
+    "FL_calf_joint":  -2.739185,
+    "RR_hip_joint":   -0.584137,
+    "RR_thigh_joint":  1.067164,
+    "RR_calf_joint":  -2.622180,
+    "RL_hip_joint":    0.544445,
+    "RL_thigh_joint":  1.051190,
+    "RL_calf_joint":  -2.626244,
+}
+
+# Seconds over which the prone -> standing target trajectory ramps. The policy tracks
+# this slowly-rising setpoint instead of being rewarded for snapping straight to stand.
+STAND_RAMP_DURATION: float = 1.25
+
 
 @configclass
 class ActionsCfg:
@@ -133,7 +155,7 @@ class ActionsCfg:
             "RR_calf_joint",
         ],
         use_default_offset=True,
-        scale=1.0,
+        scale=0.5,
         preserve_order=True,  # keep on for model transfer
         debug_vis=False,
     )
@@ -150,13 +172,15 @@ class CommandCfg:
         ranges=mdp.UniformPoseCommandAbsoluteCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.565, 0.565),  # ideal height is 0.54
+            pos_z=(0.565, 0.565),  # FINAL standing height
             roll=(0.0, 0.0),
             pitch=(0, 0),
             yaw=(0, 0),
         ),
         resampling_time_range=(5.0, 5.0),
-        debug_vis=False,
+        keypoint_times=[0.0, 0.5*STAND_RAMP_DURATION, STAND_RAMP_DURATION],
+        keypoint_heights=[0.12, 0.3, 0.565],
+        debug_vis=True,
     )
 
 
@@ -219,8 +243,59 @@ class ObservationsCfg:
             self.enable_corruption = True
             self.concatenate_terms = True
 
+    @configclass
+    class CriticCfg(ObsGroup):
+        """Privileged observations for the value function (asymmetric actor-critic).
+
+        The skrl IsaacLab wrapper exposes the obs group named ``critic`` as the
+        environment ``state``; skrl's PPO feeds it to any model whose input is
+        ``STATES`` (see the value model in skrl_stand_cfg.yaml). These terms are
+        clean (no corruption) and include ground-truth quantities the deployable
+        policy can't reliably measure, so the critic gets accurate value targets
+        without leaking privileged info into the deployed policy.
+        """
+
+        # clean copy of what the policy sees (no observation noise)
+        joint_pos_rel = ObsTerm(
+            func=mdp.joint_pos_rel,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=[
+                        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+                        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+                        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
+                        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint"
+                    ],
+                    preserve_order=True,
+                )
+            },
+        )
+
+        # privileged dynamics / pose ground truth
+        joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
+        projected_gravity = ObsTerm(func=mdp.projected_gravity)
+        base_height = ObsTerm(func=mdp.base_pos_z)
+
+        # task context
+        height_cmd = ObsTerm(func=mdp.generated_commands, params={"command_name": "height"})
+        last_action = ObsTerm(func=mdp.last_action)
+
+        # privileged contact forces on the feet
+        feet_contact_force = ObsTerm(
+            func=mdp.contact_sensor_force,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces_feet")},
+        )
+
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+    critic: CriticCfg = CriticCfg()
 
 
 @configclass
@@ -233,20 +308,7 @@ class EventCfg:
         func=mdp.reset_joints_to_pose,
         mode="reset",
         params={
-            "joint_pos_dict": {
-                "FR_hip_joint": -0.558384,
-                "FR_thigh_joint":  1.078270,
-                "FR_calf_joint":  -2.751709,
-                "FL_hip_joint":  0.534135,
-                "FL_thigh_joint":  1.089023,
-                "FL_calf_joint":  -2.739185,
-                "RR_hip_joint": -0.584137,
-                "RR_thigh_joint":  1.067164,
-                "RR_calf_joint":  -2.622180,
-                "RL_hip_joint":  0.544445,
-                "RL_thigh_joint":  1.051190,
-                "RL_calf_joint":  -2.626244,
-            },
+            "joint_pos_dict": PRONE_JOINT_POS,
             "position_noise_range": (-0.015, 0.015),
         },
     )
@@ -326,7 +388,7 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
             "command_name": "height",
         },
-        weight=-0.15,
+        weight=-0.5,
     )
 
     base_com_height_fine = RewTerm(
@@ -335,9 +397,9 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
             "command_name": "height",
             "use_tanh": True,
-            "tanh_scale": 0.05,
+            "tanh_scale": 0.15,
         },
-        weight=0.15,
+        weight=0.7,
     )
 
     # Track base velocity (CoM)
@@ -357,7 +419,6 @@ class RewardsCfg:
         weight=-2.0,
     )
 
-     # minimize base linear velocity in z direction
     base_lin_vel_z = RewTerm(
         func=mdp.body_lin_vel_l2,
         params={
@@ -365,6 +426,15 @@ class RewardsCfg:
             "x": False,
             "y": False,
             "z": True,
+        },
+        weight=-0.15,
+    )
+
+    # penalize downward z velocity specifically
+    base_lin_vel_down = RewTerm(
+        func=mdp.body_lin_vel_down,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
         },
         weight=-0.5,
     )
@@ -397,8 +467,11 @@ class RewardsCfg:
                     ".*_calf_joint": -79.0,
                 }.items()
             },
+            # ramp the desired pose from prone up to standing over the ramp window
+            # "start_target": PRONE_JOINT_POS,
+            # "ramp_duration": STAND_RAMP_DURATION,
         },
-        weight=-0.15,
+        weight=-0.05,
     )
 
     joint_error_fine = RewTerm(
@@ -415,18 +488,55 @@ class RewardsCfg:
                 }.items()
             },
             "use_tanh": True,
+            # "start_target": PRONE_JOINT_POS,
+            # "ramp_duration": STAND_RAMP_DURATION,
         },
-        weight=0.15,
+        weight=0.05,
     )
 
-    # Feet must be in contact with the ground
+    hip_joint_error = RewTerm(
+        func=mdp.joint_pos_target_error_l2,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*hip_joint"]),
+            "target": {
+                k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
+                for k, v in {
+                    "[F,R]R_hip_joint": -1.5,
+                    "[F,R]L_hip_joint": 1.5,
+                }.items()
+            },
+            # ramp the desired pose from prone up to standing over the ramp window
+            # "start_target": PRONE_JOINT_POS,
+            # "ramp_duration": STAND_RAMP_DURATION,
+        },
+        weight=-0.05,
+    )
+
+    hip_joint_error_fine = RewTerm(
+        func=mdp.joint_pos_target_error_l2,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*hip_joint"]),
+            "target": {
+                k: v * (np.pi / 180.0)  # convert to rad, the values below are in degrees
+                for k, v in {
+                    "[F,R]R_hip_joint": -1.5,
+                    "[F,R]L_hip_joint": 1.5,
+                }.items()
+            },
+            "use_tanh": True,
+            # "start_target": PRONE_JOINT_POS,
+            # "ramp_duration": STAND_RAMP_DURATION,
+        },
+        weight=0.05,
+    )
+
     feet_contacting_ground = RewTerm(
         func=mdp.strict_desired_contacts_penalty,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces_feet"),
             "threshold": 100.0,
         },  # at least 100N per foot
-        weight=-0.1,
+        weight=-0.4,
     )
 
     # penalize joint and action rate
@@ -436,9 +546,15 @@ class RewardsCfg:
         weight=-0.00001,
     )
 
+    joint_acc = RewTerm(
+        func=mdp.joint_acc_l2,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+        weight=-2.5e-7,
+    )
+
     action_rt = RewTerm(
         func=mdp.action_rate_l2,
-        weight=-0.0015,
+        weight=-0.001,
     )
 
     foot_slip = RewTerm(
@@ -449,10 +565,10 @@ class RewardsCfg:
             "contact_threshold": 10.0,
             "slip_threshold": 0.1,
         },
-        weight=0.0
+        weight=-0.1
     )
 
-    terminating = RewTerm(func=mdp.is_terminated, weight=-5.0)
+    terminating = RewTerm(func=mdp.is_terminated, weight=-50.0)
 
 
 @configclass
@@ -468,21 +584,10 @@ class CurriculumCfg:
             "group_name": "policy",
             "term_name": "joint_pos_rel",
             "noise_cfg": AdditiveUniformNoiseCfg(
-                n_min=-0.01,
-                n_max=0.01,
+                n_min=-0.02,
+                n_max=0.02,
             ),
             "activation_step": 10000,
-        },
-    )
-
-    feet_contacting_ground = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "feet_contacting_ground",
-            "w0": -0.1,
-            "w1": -0.5,
-            "t0": 3000,
-            "t1": 7000,
         },
     )
 
@@ -490,8 +595,8 @@ class CurriculumCfg:
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "action_rt",
-            "w0": -0.0015,
-            "w1": -0.02,
+            "w0": -0.001,
+            "w1": -0.002,
             "t0": 15000,
             "t1": 20000,
         },
@@ -502,57 +607,34 @@ class CurriculumCfg:
         params={
             "term_name": "joint_vel",
             "w0": -0.00001,
-            "w1": -0.001,
+            "w1": -0.0005,
             "t0": 20000,
             "t1": 27000,
         },
     )
 
-    base_lin_vel_z = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "base_lin_vel_z",
-            "w0": -0.5,
-            "w1": -1.0,
-            "t0": 40000,
-            "t1": 45000,
-        },
-    )
-
-    feet_contacting_ground2 = CurrTerm(
+    feet_contacting_ground = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "feet_contacting_ground",
-            "w0": -0.5,
-            "w1": -1.5,
-            "t0": 50000,
-            "t1": 52000,
+            "w0": -0.4,
+            "w1": -1.0,
+            "t0": 30000,
+            "t1": 32000,
         },
     )
-
 
     joint_vel2 = CurrTerm(
         func=mdp.lerp_reward_weight,
         params={
             "term_name": "joint_vel",
-            "w0": -0.001,
-            "w1": -0.01,
-            "t0": 54000,
-            "t1": 55000,
+            "w0": -0.0005,
+            "w1": -0.001,
+            "t0": 34000,
+            "t1": 35000,
         },
     )
 
-
-    foot_slip = CurrTerm(
-        func=mdp.lerp_reward_weight,
-        params={
-            "term_name": "foot_slip",
-            "w0": 0.0,
-            "w1": -0.15,
-            "t0": 1,
-            "t1": 2,
-        },
-    )
 
 
 
@@ -576,7 +658,7 @@ class TerminationsCfg:
         func=mdp.bad_orientation,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["base"]),
-            "limit_angle": math.radians(60.0),
+            "limit_angle": math.radians(100.0),
         },
     )
 
@@ -622,27 +704,14 @@ class B1StandEnvCfg(ManagerBasedRLEnvCfg):
 
     # Hold the sitting-down pose during settle steps (matches the reset pose set by
     # reset_all_joints), so PD doesn't fight gravity by targeting the standing default.
-    settle_joint_pos: dict[str, float] = {
-        "FR_hip_joint":   -0.558384,
-        "FR_thigh_joint":  1.078270,
-        "FR_calf_joint":  -2.751709,
-        "FL_hip_joint":    0.534135,
-        "FL_thigh_joint":  1.089023,
-        "FL_calf_joint":  -2.739185,
-        "RR_hip_joint":   -0.584137,
-        "RR_thigh_joint":  1.067164,
-        "RR_calf_joint":  -2.622180,
-        "RL_hip_joint":    0.544445,
-        "RL_thigh_joint":  1.051190,
-        "RL_calf_joint":  -2.626244,
-    }
+    settle_joint_pos: dict[str, float] = dict(PRONE_JOINT_POS)
 
     # Post initialization
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
         self.decimation = 2
-        self.episode_length_s = 10
+        self.episode_length_s = STAND_RAMP_DURATION + 0.5
         # viewer settings
         self.viewer.eye = (4.0, 0.0, 1.0)
         # simulation settings
@@ -671,9 +740,6 @@ class B1StandEnvCfg_PLAY(B1StandEnvCfg):
         """Post initialization."""
         self.viewer.origin_type = "world"
         self.viewer.env_index = 0
-
-        self.episode_length_s = 5
-        self.episode_length_s += self.num_reset_settle_steps * self.decimation * self.sim.dt
 
         # general settings
         self.scene.num_envs = 1

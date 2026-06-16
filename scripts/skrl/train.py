@@ -190,7 +190,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         os.path.dirname(__file__),
         "../../source/b1_rl_locomotion/b1_rl_locomotion/tasks/manager_based/b1_rl_locomotion/stand_env_cfg.py",
     )
-    shutil.copy(os.path.abspath(_env_cfg_src), os.path.join(log_dir, "params", "mtrl_b1_env_cfg.py"))
+    shutil.copy(os.path.abspath(_env_cfg_src), os.path.join(log_dir, "params", "COPIED_env_cfg.py"))
 
     # get checkpoint path (to resume training)
     resume_path = retrieve_file_path(args_cli.checkpoint) if args_cli.checkpoint else None
